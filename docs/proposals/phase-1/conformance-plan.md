@@ -196,14 +196,14 @@ nothing is claimed covered by an example that does not exercise it.
 Future test obligations (explicitly not covered by the corpus, assigned to
 the implementation phase):
 
-- **F1:** binary `/` division expression (only the compound `/=`, P38, and
-  `* `/ `%` binaries are enumerated; `/`-binary shares the multiplicative
+- **O1:** binary `/` division expression (only the compound `/=`, P38, and
+  `*`/`%` binaries are enumerated; `/`-binary shares the multiplicative
   tier and needs its own snapshot case).
-- **F2:** `%` with float operands (same token; semantic phase).
-- **F3:** precedence-combination property (random expression ASTs via
+- **O2:** `%` with float operands (same token; semantic phase).
+- **O3:** precedence-combination property (random expression ASTs via
   proptest complement the fixed cases).
-- **F4:** depth-limit boundaries (65th vs 64th nesting level) exactly.
-- **F5:** CRLF/whitespace/BOM lexical cases (P13 covers comments only).
-- **F6:** empty tuple type `()` in type position and unit expression `()`.
+- **O4:** depth-limit boundaries (65th vs 64th nesting level) exactly.
+- **O5:** CRLF/whitespace/BOM lexical cases (P13 covers comments only).
+- **O6:** empty tuple type `()` in type position and unit expression `()`.
 
 No claim of complete coverage is made beyond the table above.
