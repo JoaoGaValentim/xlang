@@ -40,7 +40,14 @@ compiler state is owned by the caller and passed explicitly.
 
 ### `xl-span`
 
-- `FileId` — opaque identifier for a registered source file.
+- `FileId` — identifier for a registered source file. **Map-scoped:** an
+  identifier is only meaningful with the `SourceMap` instance that produced
+  it. Raw indices can alias across distinct maps (index 0 of one map is a
+  different file than index 0 of another), and in-range cross-map use
+  cannot be detected by lookups; only out-of-range indices are rejected,
+  as `SpanError::UnknownFile`. Spans must always be resolved against the
+  map they were created with. Pinned by the regression test
+  `file_ids_from_distinct_maps_alias_by_raw_index`.
 - `Span { file, lo, hi }` — half-open UTF-8 byte range; fields public by
   specification contract.
 - `SourceMap` — owns registered sources; `add_file`, `file`, `source`,

@@ -21,6 +21,14 @@
 //! - Every operation on potentially invalid positions returns [`SpanError`]
 //!   and never panics.
 //!
+//! # File identifiers are map-scoped
+//!
+//! [`FileId`] values are raw indices into one [`SourceMap`] and are not
+//! globally unique: two maps can produce equal identifiers for different
+//! files. Lookups reject out-of-range indices, but cannot detect an
+//! in-range identifier that was produced by a different map; a span must
+//! always be resolved against the map it was created with.
+//!
 //! # Determinism
 //!
 //! All operations are pure functions of the registered sources. The crate
@@ -30,6 +38,11 @@
 use std::fmt;
 
 /// Identifier for a source file registered in a [`SourceMap`].
+///
+/// Identifiers are **map-scoped**: a `FileId` is only meaningful with the
+/// `SourceMap` instance that produced it, and raw indices can alias across
+/// distinct maps. See [`SourceMap::file`] for the exact validation
+/// performed by lookups.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileId(u32);
 
@@ -42,9 +55,13 @@ impl FileId {
 
     /// Creates a `FileId` from a raw index.
     ///
-    /// The returned identifier only resolves if the index was produced by
-    /// [`SourceMap::add_file`] on the same map instance. All lookups validate
-    /// the identifier and return [`SpanError::UnknownFile`] otherwise.
+    /// This is a low-level escape hatch for callers that must reconstruct an
+    /// identifier from serialized data. Identifiers are map-scoped: using an
+    /// index with a different [`SourceMap`] than the one that produced it
+    /// refers to a different file (or to none). Lookups can only detect
+    /// out-of-range indices; an in-range index from another map is silently
+    /// accepted and resolves to this map's file at the same index. Keep
+    /// spans and their originating map together.
     #[must_use]
     pub const fn from_index(index: u32) -> Self {
         Self(index)
@@ -324,10 +341,15 @@ impl SourceMap {
 
     /// Returns the registered file for `id`.
     ///
+    /// Identifiers are map-scoped: an in-range index resolves even if it was
+    /// produced by a *different* map instance, in which case it silently
+    /// refers to whatever file this map holds at that index. Only
+    /// out-of-range indices can be detected.
+    ///
     /// # Errors
     ///
-    /// Returns [`SpanError::UnknownFile`] if `id` was not produced by this
-    /// map instance.
+    /// Returns [`SpanError::UnknownFile`] if `id.index()` is not a
+    /// registered index of this map.
     pub fn file(&self, id: FileId) -> Result<&SourceFile, SpanError> {
         self.files
             .get(id.0 as usize)
