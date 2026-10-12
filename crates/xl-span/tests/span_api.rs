@@ -169,6 +169,25 @@ fn lookups_reject_unknown_files() {
 }
 
 #[test]
+fn file_ids_from_distinct_maps_alias_by_raw_index() {
+    let (map_a, file_a) = map_with("a.x", "alpha");
+    let (map_b, file_b) = map_with("b.x", "bravo");
+
+    assert_eq!(file_a, file_b);
+    assert_eq!(file_a.index(), 0);
+
+    let span = Span::new(file_a, 0, 5).unwrap();
+    assert_eq!(map_a.span_slice(span).unwrap(), "alpha");
+    assert_eq!(map_b.span_slice(span).unwrap(), "bravo");
+
+    let out_of_range = FileId::from_index(1);
+    assert_eq!(
+        map_a.file(out_of_range).unwrap_err(),
+        SpanError::UnknownFile(out_of_range)
+    );
+}
+
+#[test]
 fn line_col_maps_multiline_positions() {
     let (map, file) = map_with("t.x", "ab\ncd\n");
     assert_eq!(map.line_col(file, 0).unwrap(), LineCol { line: 1, col: 1 });
