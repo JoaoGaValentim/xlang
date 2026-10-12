@@ -9,3 +9,7 @@ publish.workspace = true
 
 [dependencies]
 xl-span.workspace = true
+
+[[test]]
+name = "cross_crate"
+path = "../../tests/cross_crate.rs"
