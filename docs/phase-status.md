@@ -17,7 +17,7 @@ criteria have been verified and the project owner has approved advancement
 | --- | --- | --- | --- |
 | 1 | Implementation completion | PASS | Workspace, `xl-span`, `xl-diag`, CI workflow, governance and specification documents on `phase/0-foundation` |
 | 2 | Local test verification | PASS | `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace` — 44 tests, 0 failed; `cargo build --workspace --locked` (run locally 2026-10-12) |
-| 3 | Remote CI verification | PASS | Run [38305175074](https://github.com/JoaoGaValentim/xlang/actions/runs/38305175074) — Format, Check (ubuntu-latest), Check (windows-latest), Check (macos-latest) all green on `a6a7f6b`; the head revision of the Directive 002 update is verified by its own run on PR #1 |
+| 3 | Remote CI verification | PASS | Run [38309849453](https://github.com/JoaoGaValentim/xlang/actions/runs/38309849453) — Format, Check (ubuntu-latest), Check (windows-latest), Check (macos-latest) all green on `8b1ba2a`; 44 tests, 0 failed (CI-observed); the head revision of this evidence update is re-verified by its own run on PR #1 |
 | 4 | Specification reconciliation | PASS | `docs/spec-v0.1-original.txt` archived byte-faithfully (SHA-256 `c3c6bce5b3e804b5c6441398e4665ac9271df4f2ca2af262d8019bcb4b343770`); `docs/spec.md` and `docs/roadmap.md` reconciled; `docs/spec-consistency-audit.md` added; PD-001 resolved |
 | 5 | License selection | BLOCKED | No license selected — mandatory owner decision (PD-008); no license file exists |
 | 6 | ADR approval (ADR-0002 / PD-007) | PENDING OWNER APPROVAL | Directive 002 engineering review completed with no defect found; ADR-0002 remains `Proposed` |
@@ -39,7 +39,7 @@ criteria have been verified and the project owner has approved advancement
 | Local format gate | PASS | `cargo fmt --all -- --check` |
 | Local clippy gate (no warnings) | PASS | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Workspace tests | PASS | `cargo test --workspace` — 44 tests, 0 failed |
-| GitHub Actions CI run succeeds | PASS | Run [38305175074](https://github.com/JoaoGaValentim/xlang/actions/runs/38305175074), all four jobs green on `a6a7f6b`; the Directive 002 head is covered by its own run on PR #1 |
+| GitHub Actions CI run succeeds | PASS | Run [38309849453](https://github.com/JoaoGaValentim/xlang/actions/runs/38309849453), all four jobs green on `8b1ba2a` (44 tests, 0 failed); later revisions are covered by their own runs on PR #1 |
 | No out-of-scope compiler stages implemented | PASS | Code review: Phase 0 crates only; no lexer/parser/AST/HIR/MIR/VM/codegen |
 | Original specification document available in repository | PASS | `docs/spec-v0.1-original.txt` (PD-001 resolved) |
 | Mandatory licensing decision resolved | BLOCKED | No license selected; owner decision required (PD-008) |
@@ -52,9 +52,10 @@ criteria have been verified and the project owner has approved advancement
   confirms ADR-0002 (PD-007), merges PR #1, and accepts the phase; technical
   gates alone do not complete the phase.
 - CI evidence: workflow run
-  [38305175074](https://github.com/JoaoGaValentim/xlang/actions/runs/38305175074)
-  completed successfully for revision `a6a7f6b`; every later revision on
-  the branch is covered by its own run on PR #1.
+  [38309849453](https://github.com/JoaoGaValentim/xlang/actions/runs/38309849453)
+  completed successfully for revision `8b1ba2a` (all four jobs; 44 tests,
+  0 failed, as observed in the CI logs); every later revision on the branch
+  is covered by its own run on PR #1.
 - Remaining mandatory items before approval: PD-008 (license, owner
   decision) and PD-007 (ADR-0002 confirmation, owner decision). Branch
   protection configuration is additionally required for the documented
