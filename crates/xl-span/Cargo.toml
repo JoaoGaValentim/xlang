@@ -1,0 +1,9 @@
+[package]
+name = "xl-span"
+description = "Source location infrastructure for the XLANG compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
