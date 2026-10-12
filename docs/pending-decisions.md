@@ -4,9 +4,8 @@ Questions that the specification does **not** (fully) answer yet.
 Implementers must not invent answers (see `docs/governance.md` §10–11).
 Each entry states the decision needed, why it matters, and its current
 status. Statuses: `RESOLVED`, `PARTIALLY DEFINED` (the original provides
-some information, listed; the remaining question is preserved),
-`UNRESOLVED`, `PROPOSED` (implemented as an explicitly labeled choice,
-owner confirmation pending).
+some information, listed; the remaining question is preserved), and
+`UNRESOLVED`.
 
 ## PD-001 — Original specification document not in repository
 
@@ -105,39 +104,34 @@ owner confirmation pending).
   tabs) matter for rendered diagnostics?
 - **Original reference:** the original fixes only the `Span { file, lo: u32,
   hi: u32 }` shape (§5) and is silent on units, bases, and invalid-position
-  behavior. The Phase 0 choice therefore remains a proposal.
+  behavior.
 - **Impact:** Every span, every rendered diagnostic, tooling interfaces.
-- **Status:** PROPOSED — implemented per
-  `docs/decisions/adr-0002-source-position-conventions.md`. The Directive
-  002 engineering review found no defect and recommends acceptance (see the
-  ADR's “Engineering review” section). Owner confirmation (Accept, or amend
-  the ADR) is still required.
+- **Status:** **RESOLVED (2026-10-12, Directive 003).** The project owner
+  approved ADR-0002 as written — UTF-8 byte offsets, half-open `[lo, hi)`
+  spans, `u32` offsets, 1-based lines and 1-based Unicode scalar-value
+  columns, explicit errors for invalid positions, and LSP UTF-16 conversion
+  deferred to the protocol boundary. ADR-0002 is now `Accepted`; the public
+  API is unchanged. The known terminal display-width limitations and
+  map-scoped `FileId` behavior remain documented; display-width handling
+  stays tracked under PD-010.
 
 ## PD-008 — License selection (mandatory Phase 0 decision)
 
 - **Question:** Which license(s) will XLANG use?
 - **Impact:** Without a license, default copyright applies (all rights
   reserved) and the project is not open for contributions under a known
-  grant. Phase 0 cannot be fully approved with this unresolved.
-- **Options prepared for the owner (Directive 002 §6):**
-  - **MIT** — short and maximally permissive; no explicit patent grant;
-    minimal obligations for downstream users.
-  - **Apache-2.0** — permissive with an explicit patent grant and patent
-    termination clause; longer text; NOTICE-file conventions; commonly
-    preferred by companies.
-  - **MIT OR Apache-2.0 (dual)** — Rust-ecosystem standard: recipients may
-    choose either license, so it maximizes compatibility; contributions
-    are licensed under both; slightly more documentation overhead.
-  - Technical recommendation: **dual MIT OR Apache-2.0**, matching the
-    practice of the Rust toolchain ecosystem; the owner decides.
-- **Files that will require updates after selection:** a new license file
-  (`LICENSE-MIT` / `LICENSE-APACHE`, or `LICENSE` for a single license);
-  `[workspace.package] license = "…"` in `Cargo.toml` plus
-  `license.workspace = true` in each crate manifest; the License sections of
-  `README.md` and `CONTRIBUTING.md`; closure of this entry and the license
-  row in `docs/phase-status.md`.
-- **Status:** UNRESOLVED — owner decision required. No license was chosen
-  and no license file was created without authorization.
+  grant. Phase 0 could not be fully approved while this was unresolved.
+- **Status:** **RESOLVED (2026-10-12, Directive 003).** The project owner
+  approved dual licensing under `MIT OR Apache-2.0` — the option
+  technically recommended in Directive 002 for Rust-ecosystem
+  compatibility, with an explicit patent grant available through the
+  Apache alternative. Implemented with the canonical license texts in
+  `LICENSE-MIT` and `LICENSE-APACHE`, the SPDX expression
+  `MIT OR Apache-2.0` declared in `[workspace.package]` and inherited by
+  each crate manifest, and updated License sections in `README.md` and
+  `CONTRIBUTING.md`. No CLA or additional legal requirements were
+  introduced; copyright attribution uses the repository owner's verified
+  identity (no invented legal identity).
 
 ## PD-009 — Public API compatibility policy
 
@@ -160,6 +154,7 @@ owner confirmation pending).
   (§6 Phase 2). Color, error codes, and terminal-width handling are not
   mentioned.
 - **Impact:** Diagnostic stability for users and tests; may amend
-  `xl-diag` rendering. Related: PD-007 (display-width alignment).
+  `xl-diag` rendering. Related: PD-007 (resolved — scalar-value columns are
+  the accepted convention; display-width handling remains open here).
 - **Status:** PARTIALLY DEFINED — the current plain-text Phase 0 format is
   a repository choice, not a specification claim.

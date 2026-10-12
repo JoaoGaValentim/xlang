@@ -68,7 +68,7 @@ cargo test --workspace
 
 Development happens on `phase/<number>-<description>` branches; `main` is
 the integration branch and receives changes only through reviewed Pull
-Requests (repository policy — current enforcement status in
+Requests, enforced by GitHub branch protection (settings in
 `docs/governance.md` §9). See `CONTRIBUTING.md` for the workflow and
 `docs/governance.md` for the engineering rules that apply to everyone,
 including automated agents.
@@ -84,7 +84,12 @@ differ, the archived original governs.
 
 ## License
 
-No license has been selected yet. Until the project owner chooses one, the
-repository carries no license grant (default copyright applies); this is a
-mandatory unresolved decision recorded in `docs/pending-decisions.md`
-(PD-008).
+XLANG is dual-licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
+
+at your option. Unless you explicitly state otherwise, any contribution
+intentionally submitted for inclusion in the work by you, as defined in the
+Apache-2.0 license, shall be dual-licensed as above, without any additional
+terms or conditions.

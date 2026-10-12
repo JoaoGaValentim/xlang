@@ -22,10 +22,9 @@ The binding rules live in `docs/governance.md`.
    ```
 
    Policy: never commit directly to `main`, never force-push it, and never
-   rewrite its history; all changes land through a Pull Request. GitHub-side
-   enforcement is not yet configured — the current status and the
-   recommended branch-protection settings are recorded in
-   `docs/governance.md` §9.
+   rewrite its history; all changes land through a Pull Request.
+   GitHub-side enforcement of this policy is active — settings are recorded
+   in `docs/governance.md` §9.
 
 2. Before every commit, run the three quality gates:
 
@@ -80,6 +79,8 @@ The binding rules live in `docs/governance.md`.
 
 ## License
 
-No license has been chosen for this project yet. By contributing you
-acknowledge that the licensing decision is pending and is the project
-owner's to make (`docs/pending-decisions.md` PD-008).
+XLANG is dual-licensed under the MIT license (`LICENSE-MIT`) and the Apache
+License, Version 2.0 (`LICENSE-APACHE`), and you may use it under either.
+By contributing, you agree that your contributions are dual-licensed under
+these same terms, without additional terms or conditions (no separate CLA
+is required).
