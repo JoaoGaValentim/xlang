@@ -33,6 +33,11 @@
 //!   = example label
 //! ```
 //!
+//! Multi-line spans are rendered on their first line only: the highlight
+//! covers the span's start line from its start column to the end of that
+//! line, and continuation lines are not displayed. This Phase 0 behavior is
+//! pinned by tests.
+//!
 //! Columns count Unicode scalar values, matching [`xl_span`]; alignment in
 //! terminals therefore assumes one display column per scalar value. The
 //! open decision on wide-character display alignment is tracked in
