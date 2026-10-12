@@ -76,4 +76,63 @@ justification so the owner can confirm or amend it.
 Neutral until confirmed: the specification is silent on these conventions
 in the material available. If the original document specifies different
 conventions, this ADR is superseded by an owner-approved change and the
-implementation is migrated in an authorized phase.
+implementation is migrated in an authorized phase. The original document
+(v0.1, archived at `docs/spec-v0.1-original.txt`) fixes only the
+`Span { file, lo: u32, hi: u32 }` shape and remains silent on units, bases,
+and invalid-position behavior; this ADR therefore stays `Proposed` pending
+owner confirmation (PD-007).
+
+## Engineering review — Directive 002 (2026-10-12)
+
+Reviewed by the Directive 002 engineering pass against the current
+implementation of `xl-span` and `xl-diag`:
+
+1. **Rust `str` indexing.** UTF-8 byte offsets make slicing O(1) and match
+   `str` semantics exactly; every public slicing/counting path validates
+   character boundaries first. Sound.
+2. **Source-map efficiency.** One `Vec<u32>` of line starts per file plus
+   binary search (`partition_point`) gives O(log n) mapping with O(lines)
+   memory and no per-query allocation. Sound.
+3. **UTF-8 boundary validation.** Enforced at every public entry point
+   (`span_slice`, `line_col`, `line_col_range`); violations return
+   `SpanError::NotCharBoundary`. Sound.
+4. **Scalar values versus grapheme clusters.** Columns count scalar values,
+   so a grapheme with combining marks spans several columns. Compiler
+   diagnostics are unaffected (spans come from lexer/parser token
+   boundaries); editor-level grapheme semantics belong to the future LSP
+   layer. Accepted, documented limitation.
+5. **CJK and emoji terminal width.** Underline alignment assumes one column
+   per scalar; wide characters can visually offset highlights. Deliberately
+   deferred (Unicode width data would add dependencies); tracked in PD-007
+   and PD-010. A rendering-layer fix can be decided later without changing
+   these conventions.
+6. **Tabs and control characters.** Tabs count as one scalar column and
+   render literally; terminal tab stops can misalign highlights. Same
+   deferral as (5), at the rendering layer. Output stays deterministic and
+   is pinned by exact-string tests.
+7. **Future LSP UTF-16 conversion.** Byte offsets plus line starts make
+   conversion to LSP positions (UTF-16 code units) a linear walk over one
+   line, isolated at the protocol boundary. No Phase 0 change needed.
+8. **Cross-platform consistency.** `\n`-based splitting, CRLF display
+   stripping, and rootless offsets behave identically on Linux, Windows, and
+   macOS; CI runs the full suite on all three. Sound.
+9. **Diagnostic correctness.** Invalid positions never panic; rendering
+   falls back deterministically; multi-line spans render on their first
+   line only (pinned by tests; now stated in the `xl-diag` docs). Sound.
+10. **Long-term API stability.** `Span` fields match the specification's
+    fixed struct; `FileId` is map-scoped (aliasing is documented and cannot
+    be detected in range); `LineCol` is 1-based. Whether public error enums
+    should be `#[non_exhaustive]` at stabilization is part of PD-009. No
+    Phase 0 change recommended.
+
+**Associated contract clarification (severity: documentation-only, low,
+no behavior change).** The `xl-span` public docs previously implied that
+lookups reject identifiers produced by a different `SourceMap`; only
+out-of-range raw indices are rejected, and in-range indices alias silently
+by design. The documentation was corrected and the behavior pinned by the
+regression test `file_ids_from_distinct_maps_alias_by_raw_index` under
+Directive 002. No defect was found in the position conventions themselves.
+
+**Recommendation:** keep the design and implementation as written.
+Recommendation to the owner: **accept ADR-0002 as written** (status remains
+`Proposed` until the owner confirms; tracked as PD-007).
