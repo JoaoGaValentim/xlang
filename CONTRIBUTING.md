@@ -21,8 +21,11 @@ The binding rules live in `docs/governance.md`.
    git switch -c phase/<number>-<short-description>
    ```
 
-   `main` is protected: never commit directly to it, never force-push it,
-   and never rewrite its history.
+   Policy: never commit directly to `main`, never force-push it, and never
+   rewrite its history; all changes land through a Pull Request. GitHub-side
+   enforcement is not yet configured — the current status and the
+   recommended branch-protection settings are recorded in
+   `docs/governance.md` §9.
 
 2. Before every commit, run the three quality gates:
 

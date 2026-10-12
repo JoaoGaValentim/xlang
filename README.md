@@ -24,7 +24,10 @@ What exists today:
   handling for invalid positions.
 - **`xl-diag`** — structured diagnostics: severities, labels, diagnostics,
   and deterministic source-aware text rendering.
-- Architecture, governance, and decision documentation under `docs/`.
+- Architecture, governance, and decision documentation under `docs/`,
+  including the archived original specification v0.1
+  (`docs/spec-v0.1-original.txt`) and its reconciled working record
+  (`docs/spec.md`).
 - GitHub Actions CI running formatting, clippy (`-D warnings`), and tests
   on Linux, Windows, and macOS.
 
@@ -64,18 +67,20 @@ cargo test --workspace
 ## Contributing
 
 Development happens on `phase/<number>-<description>` branches; `main` is
-the protected integration branch and receives changes only through reviewed
-Pull Requests. See `CONTRIBUTING.md` for the workflow and
+the integration branch and receives changes only through reviewed Pull
+Requests (repository policy — current enforcement status in
+`docs/governance.md` §9). See `CONTRIBUTING.md` for the workflow and
 `docs/governance.md` for the engineering rules that apply to everyone,
 including automated agents.
 
 ## Specification
 
-The authoritative document is "xlang — Engineering Specification and
-Development Plan" v0.1 (October 12, 2026). At Phase 0 execution time the
-original document was not yet available in this repository; `docs/spec.md`
-records the owner-provided binding summary and flags every open question.
-The original document must be committed before Phase 1 begins.
+The authoritative document is "xlang — Especificação e Plano de
+Engenharia" v0.1 (October 12, 2026). The original (Portuguese) document is
+archived byte-faithfully at `docs/spec-v0.1-original.txt`; `docs/spec.md` is
+the reconciled working record derived from it, and
+`docs/spec-consistency-audit.md` records the consistency audit. Where they
+differ, the archived original governs.
 
 ## License
 
