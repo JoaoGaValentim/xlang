@@ -66,9 +66,10 @@ criteria have been verified and the project owner has approved advancement
 | Lexer contract | PROPOSED — OWNER REVIEW REQUIRED | `docs/proposals/phase-1/lexer-contract.md` |
 | Parser and AST contract | PROPOSED — OWNER REVIEW REQUIRED | `docs/proposals/phase-1/parser-ast-contract.md` |
 | Conformance plan | PROPOSED — OWNER REVIEW REQUIRED | `docs/proposals/phase-1/conformance-plan.md` |
-| Decision packet (PD-002…PD-006 + G-1…G-5) | PROPOSED — OWNER REVIEW REQUIRED | `docs/proposals/phase-1/decision-packet.md` |
+| Decision packet (categories A/B/C: PD-002…PD-006, G-1…G-4, B-1…B-4) | PROPOSED — OWNER REVIEW REQUIRED | `docs/proposals/phase-1/decision-packet.md` |
+| Consistency review (Directive 005 corrections) | PROPOSED — OWNER REVIEW REQUIRED | `docs/proposals/phase-1/consistency-review.md` |
 | PD-002 through PD-006 | PROPOSALS PREPARED — NOT RESOLVED | `docs/pending-decisions.md`; packet rows |
-| Phase 1 implementation (`xl-lexer`, `xl-ast`, `xl-parser`, `xc parse`) | NOT AUTHORIZED | Directive 004 §3; no new crates exist |
+| Phase 1 implementation (`xl-lexer`, `xl-ast`, `xl-parser`, `xc parse`) | NOT AUTHORIZED | Directives 004 §3 and 005; no new crates exist |
 | Phase 1 docs CI | See PR #2 | GitHub Actions run on the PR head |
 
 ## Notes

@@ -40,6 +40,9 @@ some information, listed; the remaining question is preserved), and
   and gap resolutions — `Break`/`Continue` restoration, the compound
   assignment family, `Underscore`, and the recovery-only `Error` token — in
   `docs/proposals/phase-1/grammar-rfc.md` §2; decision-packet row PD-002.
+  Numeric literal payloads (magnitude + radix) require the explicit
+  amendment **B-2**; float overflow policy is **B-3**
+  (`docs/proposals/phase-1/decision-packet.md`, category B).
 - **Status:** PARTIALLY DEFINED — proposal prepared and under owner
   review; not resolved.
 
@@ -57,8 +60,11 @@ some information, listed; the remaining question is preserved), and
 - **Impact:** Parser grammar and MIR semantics.
 - **Phase 1 proposal (pending owner approval):** assignment as a
   syntactically non-associative lowest-tier expression; place-expression
-  LHS validation at parse time; `()` value direction; `let` remains the
-  sole declaration — `docs/proposals/phase-1/grammar-rfc.md` §5;
+  LHS validation at parse time, with grouping parentheses transparent
+  (explicit amendment **B-1**); `let` remains the sole declaration. Whether
+  assignment produces a value (proposed: none — a `()` result) is a
+  type-system question deferred with the rest of the type rules, not fixed
+  by the frontend contract — `docs/proposals/phase-1/grammar-rfc.md` §5;
   decision-packet row PD-003.
 - **Status:** PARTIALLY DEFINED — proposal prepared and under owner
   review; not resolved.
@@ -79,7 +85,8 @@ some information, listed; the remaining question is preserved), and
   with lexer-decoded escapes and recursively lexed embedded expressions;
   `\{`/`\}` escaping; `StringLit { parts }` AST; full diagnostic set —
   `docs/proposals/phase-1/lexer-contract.md` §5 and
-  `parser-ast-contract.md` §4; decision-packet row PD-004.
+  `parser-ast-contract.md` §4; decision-packet row PD-004. Nesting and
+  stack-safety limits require the explicit amendment **B-4**.
 - **Status:** PARTIALLY DEFINED — proposal prepared and under owner
   review; not resolved.
 
