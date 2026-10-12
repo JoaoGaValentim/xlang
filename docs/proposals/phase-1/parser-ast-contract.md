@@ -112,7 +112,12 @@ pub enum ExprKind {
     While(Box<Expr>, Block), For(Box<Pat>, Box<Expr>, Block),
     Loop(Block), Break, Continue, Return(Option<Box<Expr>>),
 }
-pub enum Lit { Int(i64), Float(f64), Bool(bool), Char(char), Str(StringLit) }
+pub enum Lit { Int(IntLit), Float(f64), Bool(bool), Char(char), Str(StringLit) }
+/// Integer literal payload (amendment B-2; departs from the §5 sketch's
+/// `Int(i64)`): magnitude plus radix; signed/target range checks are the
+/// type-system phase's job (`lexer-contract.md` §4.1). PROPOSED.
+pub struct IntLit { pub magnitude: u64, pub radix: Radix }
+pub enum Radix { Dec, Hex, Bin }
 pub struct StringLit { pub parts: Vec<StringPart>, pub span: Span }
 pub enum StringPart { Text(String), Expr(Expr) }
 pub struct Path { pub segments: Vec<Ident>, pub span: Span }
@@ -158,6 +163,12 @@ Structural requirements vs open implementation details:
    later diagnostic wants operator spans, it is an additive change.
 5. The `Str` token's segments already carry absolute spans; the parser
    re-uses them for `StringPart::Expr` sub-expressions (no span recompute).
+6. **Syntax-only constructs are not represented and do not extend inner
+   spans:** grouping parentheses, trailing commas, and operator tokens
+   produce no node. A grouped expression or type yields the inner node
+   unchanged, and its span covers only the inner tokens (`(x)` has the
+   span of `x`). This is what makes parenthesized assignment targets
+   transparent (§3(5), amendment B-1).
 
 ## 3. Parsing rules (normative)
 
@@ -166,14 +177,30 @@ procedural rules the implementation must follow. All are PROPOSED unless
 marked.
 
 1. **Top level:** parse items until `Eof`; recover per §4.
-2. **Statement parsing / semicolon rule** (DERIVED, grammar-rfc §8.4):
-   after parsing an expression in statement position:
-   - if `;` follows → consume, statement complete;
-   - else if the expression is block-like (`If`/`Match`/`While`/`For`/
-     `Loop`/`Block`) → statement complete without `;`;
-   - else if `}` follows → the expression is the block's tail;
+2. **Statement parsing / semicolon rule** (DERIVED; **corrected decision
+   order**, Directive 005 §4; grammar-rfc §3.2): after parsing an
+   expression in statement position, decide in this exact order:
+   - `;` follows → `StmtKind::Expr`, consume `;`;
+   - else the next token is the enclosing block's `}` → the expression is
+     the block's **tail** (`Block.tail`), preserving its value;
+   - else the expression is *block-like* (`If`/`Match`/`While`/`For`/
+     `Loop`/`Block`) → semicolon-free `StmtKind::Expr`;
    - else → diagnostic `expected ';'` (primary span at the next token) and
      recovery per §4.
+   The tail check precedes the block-like check: a tail `match`/`if` must
+   survive as the block's value (`fn area`, `fn parse`), never be
+   reclassified as a statement. Classification cases (all pinned by
+   conformance cases T1–T7):
+
+   | Case | Source fragment | Classification |
+   | --- | --- | --- |
+   | Tail `match` | `fn area(…){ …; match s { … } }` | `Block.tail = Some(Match)` |
+   | Tail `if/else` | `fn f(){ if c {1} else {2} }` | `Block.tail = Some(If)` |
+   | Tail block | `fn f(){ { g(); } }` | `Block.tail = Some(Block)` |
+   | Non-tail `for` | `fn f(){ for i in 0..10 { p(i); } finish(); }` | `Stmt::Expr(For)` (block-like; next token ≠ `}`, ≠ `;`) |
+   | Block-like + `;` | `{ match s { … }; }` | `Stmt::Expr(Match)` + `;` consumed; tail is `None` |
+   | Ordinary tail | `fn f(){ g() }` | `Block.tail = Some(Call)` |
+   | Missing `;` | `fn f(){ g() h() }` | diagnostic `expected ';'` + recovery |
 3. **Generic closer** (PROPOSED, packet G-3): in type-argument context,
    closing consumes `Gt`; if a `Ge` token remains and the run still needs
    closers, `Ge` is split once into `>` (consumed) plus a synthesized `=`
@@ -185,9 +212,13 @@ marked.
    Name-resolution disambiguation is Phase 2's job; the syntax-level rule is
    only: `IDENT` alone → binding candidate; `path "(" … ")"` → constructor
    with args; `path` containing `::` → path pattern (grammar-rfc §3.5).
-5. **Assignment target check** (PROPOSED, PD-003): after parsing an
-   assignment's LHS, validate the shape (Path | Field | Index); otherwise
-   diagnostic `invalid assignment target` at the LHS span; the node is still
+5. **Assignment target check** (PROPOSED, PD-003; amendment B-1):
+   grouping parentheses are not represented in the AST, so they are
+   transparent for this classification. After parsing an assignment's LHS,
+   validate the shape (Path | Field | Index) — this accepts `(x) = 1`,
+   `((x)) = 1`, `(o.f) = 1`, `(v[i]) = 1` exactly like their
+   unparenthesized forms, and rejects `(x + y) = 1`, `f() = 1`, `42 = 1`
+   with `invalid assignment target` at the LHS span; the node is still
    built with the offending expression for recovery.
 6. **Non-associative tiers** (PROPOSED, PD-005): the Pratt loop detects a
    second operator of the same non-assoc tier and emits
@@ -211,7 +242,17 @@ marked.
   (b) at least one token is consumed per recovery cycle (progress);
   (c) each top-level item yields at most one recovery cascade — multiple
   errors per run are expected and encouraged (SPECIFIED Phase 1 requirement
-  to report several errors per execution).
+  to report several errors per execution);
+  (d) **stack safety (B-4):** expression/type/pattern/statement recursion is
+  bounded by a constant `MAX_PARSE_DEPTH` (proposed value: **64**);
+  exceeding it produces `expression nesting limit (64) exceeded` at the
+  offending token, skips to the expression synchronization set, and
+  continues — no stack overflow for any input, including adversarial
+  nesting such as thousands of `(`. The limit is an implementation-safety
+  policy (packet B-4), not language semantics;
+  (e) every span used in a diagnostic is a valid `xl-span` position or the
+  documented `xl-diag` fallback marker; no unchecked offsets are ever
+  constructed.
 - **Synchronization sets:**
   - item level: `;`, `}`, `fn`, `struct`, `enum`, `impl`, `trait`, `import`,
     `pub`, `Eof`;
@@ -233,18 +274,36 @@ Printer contract (PROPOSED — this is *not* the Phase 8 formatter):
 1. Pure function `print(&Item) -> String` (plus helpers), deterministic,
    no environment input.
 2. **AST-preserving:** inserting parentheses where required by §4.1
-   precedence/associativity so that `parse(print(ast)) == ast` for the
-   compared fields (spans excluded — printing regenerates spans).
+   precedence/associativity of `grammar-rfc.md` so that `parse(print(ast))`
+   is equivalent to `ast` under the comparison relation of item 6.
 3. Canonical formatting rules (minimal, stable): four-space indentation;
    one statement per line; single spaces around binary/assignment
    operators; no space inside `()`/`[]`; `, ` between list elements;
    no trailing commas emitted; blocks always braced; `else` on the same
-   line as the closing brace; string literals re-escaped from decoded
-   values; interpolation re-printed as `{expr}`.
+   line as the closing brace; interpolation re-printed as `{expr}`.
 4. Comments are not represented in the AST and therefore not printed
    (round-trip equality is AST equality, not text identity) — stated here
    so the test criterion is exact.
-5. The printer output is a debugging artifact for `xc parse`; pretty
+5. **Literal printing:** integers print in their stored radix without
+   underscores (`0x`/`0b` lowercase prefixes; decimal otherwise); floats
+   print via shortest-round-trip decimal notation that satisfies the lexer
+   grammar (`1e300`-style exponents are valid floats; `inf`/`NaN` are never
+   emitted — accepted literals are finite, B-3); strings re-escape decoded
+   text so re-parsing yields the same `StringLit`: `"`→`\"`, `\`→`\\`,
+   `{`→`\{`, `}`→`\}`, `\n`/`\r`/`\t`/`\0`→short escapes, other control or
+   non-printable scalars → `\u{…}`; printable text passes through
+   literally. A literal `{` therefore can never be misprinted into an
+   interpolation.
+6. **Round-trip equality relation (`≡`):** compares node kinds, names,
+   structure, string segments, and literal **values** (integer radix is not
+   required to round-trip: `0xFF` and `255` compare equal; float bit
+   patterns). **Excluded from equality:** spans (regenerated on reparse),
+   parser-assigned node IDs, and placeholder/error nodes (item 7).
+7. **Placeholder printing:** recovered/error nodes print as the fixed,
+   non-lexable marker `<error>`. The round-trip property is defined only
+   for successfully parsed trees; no rejected input round-trips to a
+   placeholder.
+8. The printer output is a debugging artifact for `xc parse`; pretty
    formatting policy belongs to the Phase 8 formatter.
 
 Test strategy (implementation phase; SPECIFIED Phase 1 test list):
@@ -252,11 +311,16 @@ Test strategy (implementation phase; SPECIFIED Phase 1 test list):
 - **Snapshots (insta):** tokens and ASTs for the conformance corpus
   (`conformance-plan.md`), asserting exact `Debug`/printer output so drift
   fails loudly.
-- **Round-trip property (proptest):** `parse(print(ast)) == ast` for
-  generated ASTs and for `ast(print(ast(src)))` over the corpus.
+- **Round-trip property (proptest):** `parse(print(ast)) ≡ ast` (item 6
+  relation: spans and IDs excluded, values compared) for generated ASTs and
+  for `ast(print(ast(src)))` over the corpus; explicitly **not** claimed
+  for rejected inputs (placeholder printing, item 7). String cases include
+  literal braces, escaped characters, nested interpolation, and
+  interpolated calls.
 - **Fuzz (cargo-fuzz):** lexer-parser pipeline over arbitrary text: no
-  panics, no unbounded recursion, progress guarantee holds, diagnostics
-  well-formed (valid spans per `xl-span` oracles).
+  panics (including **no stack overflow** — B-4 limits), no unbounded
+  recursion, progress guarantee holds, one trailing `Eof`, all spans valid
+  per the lexer contract §9 invariants.
 - None of these tests exist yet; nothing in this document claims executed
   results.
 
@@ -275,9 +339,14 @@ directive)
 
 - Every `ExprKind` variant maps to a grammar production in
   `grammar-rfc.md` §3; no variant exists without a production.
-- Every grammar production has a node representation; no node invents
-  semantics beyond syntax.
+- Every grammar production has a node representation, or is listed as
+  syntax-only in `consistency-review.md` §A (grouping, trailing commas,
+  operator tokens, visibility markers are carried as data, not nodes).
 - Recovery sets contain only existing tokens; no dependency on lexer
   internals.
 - No Phase 2+ concern (resolution, typing, desugaring, exhaustiveness) is
-  referenced as a Phase 1 behavior.
+  referenced as a Phase 1 behavior; control-flow *type* claims are deferred
+  (`consistency-review.md` §B-2).
+- The Directive 005 corrections (tail order §3(2), B-1 targets §3(5), B-2
+  payload §2.2, B-4 depth §4, printer items 5–7) are reflected
+  consistently with the other proposal documents.

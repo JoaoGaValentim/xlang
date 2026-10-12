@@ -101,8 +101,8 @@ expressions. Treating `self` as a keyword would contradict §3.
 
 | Token | Forms (proposal) | Evidence |
 | --- | --- | --- |
-| `Int` | decimal `1_000`; hex `0xFF`; binary `0b1010` | SPECIFIED §3 |
-| `Float` | `3.14159`, `0.0`, `1.5e3`, `1e5` | SPECIFIED category "floats"; forms PROPOSED (see `lexer-contract.md` §4) |
+| `Int` | decimal `1_000`; hex `0xFF`; binary `0b1010`. Token carries **magnitude (`u64`) + radix**; signed/target-type range checks are deferred to the type-system phase (amendment B-2, `lexer-contract.md` §4.1). The §5 sketch's `Int(i64)` payload is amended for this reason | SPECIFIED §3; representation amended (PROPOSED) |
+| `Float` | `3.14159`, `0.0`, `1.5e3`, `1e5`. Tokens always carry a **finite** `f64`; literals that overflow to infinity are diagnosed (amendment B-3, `lexer-contract.md` §4.2). `Float(f64)` payload follows the §5 sketch | SPECIFIED category "floats"; forms/policy PROPOSED (see `lexer-contract.md` §4) |
 | `Str` | structured string with escapes and `{expr}` interpolation | SPECIFIED §3; structure per PD-004 |
 | `Char` | `'a'`, escapes | SPECIFIED §3 |
 | `true`, `false` | boolean literals (keywords) | SPECIFIED §3 |
@@ -196,15 +196,23 @@ let_stmt    = "let" [ "mut" ] pattern [ ":" type ] "=" expr ";" ;
 expr_stmt   = expr ( ";" | ε ) ;        (* see the semicolon rule below *)
 ```
 
-**Semicolon rule (DERIVED from the §3 example, restated precisely in
-`parser-ast-contract.md`):** in statement position, parse a full expression;
-if the next token is `;`, consume it and the statement is complete. If not,
-the expression is a valid statement only when it is *block-like*
-(`If`, `Match`, `While`, `For`, `Loop`, `Block`) **or** it is the final
-expression of the enclosing block (tail expression). Anything else is a
-diagnostic ("expected `;`"). Evidence: in `fn main` the `for` statement is
-followed directly by the next statement with no `;`, while
-`total += i as f64;` and `io.println(…);` carry one.
+**Semicolon rule (DERIVED from the §3 example; corrected decision order per
+Directive 005 §4, restated precisely in `parser-ast-contract.md` §3):** in
+statement position, parse a full expression, then decide in this exact
+order:
+
+1. `;` follows → the expression is an expression statement (`;` consumed).
+2. otherwise, the next token is the enclosing block's `}` → the expression
+   is the block's **tail expression** (its value is preserved).
+3. otherwise, the expression is *block-like* (`If`, `Match`, `While`,
+   `For`, `Loop`, `Block`) → semicolon-free expression statement.
+4. otherwise → diagnostic `expected ';'` with deterministic recovery.
+
+Rule 2 precedes rule 3 deliberately: a block-like expression in tail
+position — the `match` in `fn area`, the `if` in `fn parse` — must remain
+the block's value and must not be reclassified as a statement. Evidence: in
+`fn main` the `for` statement is followed directly by the next statement
+with no `;`, while `total += i as f64;` and `io.println(…);` carry one.
 
 There is no empty statement: a lone `;` is not a `stmt` (DERIVED — the §3
 `stmt` production cannot derive it).
@@ -274,14 +282,24 @@ G-1/G-4.
 ### 3.4 Types
 
 ```ebnf
-type        = path_type | "(" [ type { "," type } [ "," ] ] ")"
-            | "[" type [ ";" expr ] "]"
-            | "fn" "(" [ type { "," type } [ "," ] ")" ] [ "->" type ] ;
+type         = path_type | grouped_type | tuple_type
+             | "[" type [ ";" expr ] "]"
+             | "fn" "(" [ type_list ] ")" [ "->" type ] ;
 
-path_type   = IDENT { "::" IDENT } [ generic_args ] ;
+grouped_type = "(" type ")" ;
+tuple_type   = "(" ")" | "(" type "," [ type { "," type } [ "," ] ] ")" ;
+type_list    = type { "," type } [ "," ] ;
+path_type    = IDENT { "::" IDENT } [ generic_args ] ;
 generic_args = "<" type { "," type } [ "," ] ">" ;     (* closer rule, §8.7 *)
-type_list   = type { "," type } [ "," ] ;
 ```
+
+Derivable forms (checked in `consistency-review.md` §D-3): `()`, `(i64)`
+(grouping — same node as `i64`), `(i64,)`, `(i64, bool)`, `[i64]`,
+`[i64; 4]`, `Result<i64, str>`, `Vec<Vec<i64>>`, `fn()`, `fn(i64)`,
+`fn(i64) -> i64`, `fn(i64, bool) -> Result<i64, str>`. Grouping is
+syntax-only: `(T)` yields the inner type node (no AST wrapper). The
+function type has an optional (possibly empty) parameter list and an
+optional return type; the three optionals are independent.
 
 Labels: SPECIFIED §3 type list (`i8..i64`, `u8..u64`, `isize`, `usize`,
 `f32`, `f64`, `bool`, `char`, `str`, `()`, `[T]`, `[T; N]`, `(A, B)`,
@@ -359,16 +377,24 @@ PROPOSED contract (full rationale in the decision packet):
    REQUIRED by the example; the remainder complete the family).
 3. **Left-hand side:** restricted at parse time to *place expressions*:
    `path_expr` (identifier or `self`), field access (`e.name`), or index
-   (`e[i]`). Parenthesized targets (`(x) = 1`), calls, literals, and
-   binary results are **syntax errors** (`invalid assignment target`),
-   reported without any type checking. Recovery: the node is still built so
-   that parsing continues.
+   (`e[i]`). Grouping parentheses are **transparent** for this
+   classification (amendment B-1, Directive 005 §5): the AST does not
+   retain grouping nodes, so `(x) = 1`, `((x)) = 1`, `(obj.field) = 1`, and
+   `(items[i]) = 1` are valid assignment forms exactly like their
+   unparenthesized counterparts. `(x + y) = 1`, `f() = 1`, and `42 = 1`
+   remain **syntax errors** (`invalid assignment target`), reported without
+   any type checking. Recovery: the node is still built so that parsing
+   continues. (The Directive 004 draft rejected `(x) = 1`, contradicting
+   the AST that drops grouping; B-1 resolves the contradiction in favor of
+   transparency.)
 4. **Non-associativity:** `a = b = c` is a syntax error (see §4); write
    `a = (b = c)` to nest explicitly. This removes the classic chained-
    assignment hazard without requiring Phase 2 type rules.
-5. **Value and type (proposed direction, enforced in Phase 2):** an
-   assignment expression has type `()`. No value is produced. `let` is the
-   only binding form; there is no assignment-as-declaration.
+5. **Value and type (proposed direction only; a type-system-phase
+   question, not part of the Phase 1 frontend contract):** assignment is
+   *proposed* to have type `()` and produce no value; approval belongs to
+   the type-system phase. `let` is the only binding form; there is no
+   assignment-as-declaration.
 6. **Declaration is not assignment:** `let [mut] pattern [: type] = expr;`
    (SPECIFIED) is a statement; its `=` is initializer syntax, not the
    tier-1 operator. The initializer is a full `expr` (so
@@ -442,14 +468,19 @@ proposed parsing rule. Items marked (packet) are also raised in
 3. **Loops/control flow absent from the §3 `stmt` EBNF and the §5
    `ExprKind` sketch** — Example: `for i in 0..10 { … }` and `while x { … }`
    and `loop { … }` and `return n;` and `break;` must be derivable.
-   Proposed rule: `while`/`for`/`loop`/`return`/`break`/`continue` are
-   **expressions** (primary-level), all of unit type except `return` whose
-   operand (optional) extends maximally to the right. `break`/`continue`
-   take no operand (`break` with a value is UNRESOLVED). (packet G-1)
+   Proposed rule (syntax only): `while`/`for`/`loop`/`return`/`break`/
+   `continue` are **expressions** (primary-level); `return`'s optional
+   operand extends maximally to the right; `break`/`continue` take no
+   operand (`break` with a value is UNRESOLVED). Type behavior — unit
+   values, divergence, value-producing loops — is **not** fixed by this
+   frontend contract; it is deferred to the type-system phase (see
+   `consistency-review.md` §B-2 and packet category C). (packet G-1)
 4. **Statement semicolon rule** — Evidence: the `for` statement in `fn
-   main` carries no `;`. Proposed rule in §3.2: semicolon required for
-   non-block-like expression statements; optional/absent for block-like
-   statements and tail expressions. (packet G-2)
+   main` carries no `;`. Corrected rule (§3.2): exact decision order is
+   `;` → statement; else `}` → **tail expression**; else block-like →
+   semicolon-free statement; else diagnostic. The tail check precedes the
+   block-like check so tail `match`/`if` values survive (`fn area`,
+   `fn parse`). (packet G-2)
 5. **Function parameters and `self`** — `pub fn dist(self, o: Point) -> f64`
    (§3). Proposed rule: `param = "self" | IDENT ":" type`; `self` allowed
    only as the first parameter of a method; `mut self` and pattern
@@ -529,15 +560,26 @@ proposed parsing rule. Items marked (packet) are also raised in
 - Every operator in §2.4 appears in exactly one tier of §4.1 (or is
   punctuation with a grammar rule in §3); every tier operator is in §2.4.
 - The §3 example is derivable by the grammar of §3 (checked item by item in
-  `conformance-plan.md` §2).
+  `conformance-plan.md` §2 and re-derived in `consistency-review.md` §D).
 - No rule contradicts §1–§2 evidence; all additions carry a PROPOSED label
   and appear in the decision packet.
 - The grammar introduces no Phase 2+ semantics (no resolution, no types, no
-  exhaustiveness, no desugaring).
+  exhaustiveness, no desugaring). Control-flow *typing* claims were removed
+  under Directive 005 §10 (see `consistency-review.md` §B-2).
+- Directive 005 corrections applied here: tail-expression decision order
+  (§3.2), parenthesized assignment targets (§5.3, B-1), function-type EBNF
+  (§3.4), numeric literal representation (§2.3, B-2/B-3). The full audit is
+  `consistency-review.md`.
 
 ## 10. Open items carried to the owner
 
-Decision packet rows: PD-002, PD-003, PD-004, PD-005, PD-006, G-1
-(control-flow expressions), G-2 (semicolon rule), G-3 (generic closer
-disambiguation), G-4 (tuple/array literal expressions), G-5 (informational:
-struct literal syntax remains UNRESOLVED and is excluded from Phase 1).
+The decision packet (`decision-packet.md`) is organized in three categories:
+
+- **A — ready for approval:** PD-002, PD-003 (core), PD-004 (core), PD-005,
+  PD-006, G-1 (syntax), G-2 (corrected), G-3, G-4.
+- **B — explicit amendment approvals:** B-1 parenthesized assignment
+  targets, B-2 numeric literal representation, B-3 floating-point overflow
+  policy, B-4 nesting/resource-safety limits.
+- **C — deferred semantics/features:** G-5 struct literals (UNRESOLVED),
+  control-flow type behavior, `break` with a value, open-ended ranges,
+  `..=`, attributes, and any other later-phase feature.
