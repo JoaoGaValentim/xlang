@@ -1,7 +1,7 @@
 # ADR-0002 — Source Position Conventions
 
-- **Status:** Proposed — implemented in Phase 0; owner confirmation pending
-  (tracked as PD-007).
+- **Status:** Accepted — approved by the project owner via Engineering
+  Directive 003 (2026-10-12); implemented in Phase 0; PD-007 closed.
 - **Date:** 2026-10-12
 
 ## Context
@@ -58,7 +58,7 @@ justification so the owner can confirm or amend it.
   question for later phases.
 - **Display-width columns (wide characters, tabs).** Deferred: requires
   Unicode width data and grapheme handling, which would add dependencies;
-  the alignment caveat is recorded in PD-007/PD-010.
+  the alignment caveat is recorded in PD-010.
 
 ## Consequences
 
@@ -73,14 +73,13 @@ justification so the owner can confirm or amend it.
 
 ## Specification impact
 
-Neutral until confirmed: the specification is silent on these conventions
-in the material available. If the original document specifies different
+Confirmed by the project owner (Directive 003, 2026-10-12): the original
+document (v0.1, archived at `docs/spec-v0.1-original.txt`) fixes only the
+`Span { file, lo: u32, hi: u32 }` shape and is silent on units, bases, and
+invalid-position behavior; the owner accepts this ADR as the project's
+binding convention. If a future specification revision specifies different
 conventions, this ADR is superseded by an owner-approved change and the
-implementation is migrated in an authorized phase. The original document
-(v0.1, archived at `docs/spec-v0.1-original.txt`) fixes only the
-`Span { file, lo: u32, hi: u32 }` shape and remains silent on units, bases,
-and invalid-position behavior; this ADR therefore stays `Proposed` pending
-owner confirmation (PD-007).
+implementation is migrated in an authorized phase.
 
 ## Engineering review — Directive 002 (2026-10-12)
 
@@ -91,8 +90,13 @@ implementation of `xl-span` and `xl-diag`:
    `str` semantics exactly; every public slicing/counting path validates
    character boundaries first. Sound.
 2. **Source-map efficiency.** One `Vec<u32>` of line starts per file plus
-   binary search (`partition_point`) gives O(log n) mapping with O(lines)
-   memory and no per-query allocation. Sound.
+   binary search (`partition_point`) locates the line in O(log n). The
+   column is then obtained by counting Unicode scalar values between the
+   line start and the requested byte offset — a linear scan of the line
+   prefix (O(k) in the prefix length, worst case linear in the file size) —
+   so the combined mapping cost is O(log n + k), with O(lines) memory and
+   no per-query allocation. Sound for compiler workloads; stated precisely
+   as such.
 3. **UTF-8 boundary validation.** Enforced at every public entry point
    (`span_slice`, `line_col`, `line_col_range`); violations return
    `SpanError::NotCharBoundary`. Sound.
@@ -103,9 +107,9 @@ implementation of `xl-span` and `xl-diag`:
    layer. Accepted, documented limitation.
 5. **CJK and emoji terminal width.** Underline alignment assumes one column
    per scalar; wide characters can visually offset highlights. Deliberately
-   deferred (Unicode width data would add dependencies); tracked in PD-007
-   and PD-010. A rendering-layer fix can be decided later without changing
-   these conventions.
+   deferred (Unicode width data would add dependencies); tracked in PD-010.
+   A rendering-layer fix can be decided later without changing these
+   conventions.
 6. **Tabs and control characters.** Tabs count as one scalar column and
    render literally; terminal tab stops can misalign highlights. Same
    deferral as (5), at the rendering layer. Output stays deterministic and
@@ -134,5 +138,7 @@ regression test `file_ids_from_distinct_maps_alias_by_raw_index` under
 Directive 002. No defect was found in the position conventions themselves.
 
 **Recommendation:** keep the design and implementation as written.
-Recommendation to the owner: **accept ADR-0002 as written** (status remains
-`Proposed` until the owner confirms; tracked as PD-007).
+Recommendation to the owner: **accept ADR-0002 as written** — accepted by
+the project owner via Directive 003 (2026-10-12); the status is now
+`Accepted` and PD-007 is closed. The implementation was not modified by
+this approval.

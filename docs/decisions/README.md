@@ -34,5 +34,5 @@ An ADR is never marked `Accepted` merely because implementation was easier
 | ADR | Title | Status |
 | --- | --- | --- |
 | [0001](adr-0001-crate-layout-and-dependency-direction.md) | Crate layout and dependency direction | Accepted — mandated by Directive 001 |
-| [0002](adr-0002-source-position-conventions.md) | Source position conventions | Proposed — owner confirmation pending (PD-007) |
+| [0002](adr-0002-source-position-conventions.md) | Source position conventions | Accepted — owner approval via Directive 003 |
 | [0003](adr-0003-toolchain-and-edition.md) | Toolchain pinning and Rust edition | Accepted — delegated by Directive 001 |

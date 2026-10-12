@@ -46,15 +46,15 @@ Original acceptance criteria (original §6):
 - `cargo test --workspace` green.
 - A sample diagnostic rendered with span and label.
 
-Current state (2026-10-12, Directive 002):
+Current state (2026-10-12, Directives 002–003):
 
 - Workspace, `xl-span`, `xl-diag`, CI, contribution guide, and ADR records:
   implemented and verified — evidence in `docs/phase-status.md`.
 - `docs/spec.md`: reconciled with the archival original (PD-001 resolved).
-- **License: not selected — mandatory owner decision (PD-008).** Phase 0
-  cannot be fully approved while this is unresolved.
-- ADR-0002 (source position conventions) remains `Proposed` pending owner
-  confirmation (PD-007).
+- License: dual `MIT OR Apache-2.0` selected and implemented (PD-008
+  resolved, Directive 003).
+- ADR-0002 (source position conventions): accepted by the project owner
+  (PD-007 resolved, Directive 003).
 
 No Phase 1 work of any kind has been performed.
 

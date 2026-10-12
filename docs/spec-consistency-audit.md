@@ -65,13 +65,13 @@ internal partiality of the original is preserved as an open question
 | Planned crate boundaries | §4 | `docs/architecture.md` §2–3; ADR-0001 | CONSISTENT |
 | Public contracts (`Span` struct, newtype IDs) | §5, §4 (conventions) | `xl-span` matches the `Span` struct exactly; newtype-ID convention followed | CONSISTENT |
 | Dependency direction | Not specified in the original | ADR-0001 (Accepted — delegated by Directive 001) fixes `xl-diag → xl-span`; does not conflict with the original | CONSISTENT (repository decision where the original is silent; recorded in the ADR) |
-| Source spans: offset unit, line/column bases, invalid positions | Implied by the `Span` sketch; not defined | ADR-0002 (`Proposed`) + PD-007; engineering review completed under Directive 002 | UNDERSPECIFIED |
+| Source spans: offset unit, line/column bases, invalid positions | Implied by the `Span` sketch; not defined | ADR-0002 — `Accepted` (owner approval via Directive 003); engineering review completed under Directive 002; PD-007 resolved | CONSISTENT (repository decision where the original is silent; owner-approved) |
 | Diagnostics (spans, labels, suggestions) | §1 (objective), §6 Phase 2 (acceptance) | `xl-diag` implements severity/labels/rendering (Phase 0 subset); suggestions are Phase 2 scope | CONSISTENT |
 | Unsafe Rust restrictions | §4 (forbid except `xl-vm`, `xl-codegen`, with Miri) | Both Phase 0 crates carry `#![forbid(unsafe_code)]`; governance INV-005 mirrors the exception rule for future phases | CONSISTENT |
 | Tests and CI | §6 Phase 0, §9 | `.github/workflows/ci.yml` runs exactly `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, on a Linux/Windows/macOS matrix | CONSISTENT |
 | Quality process (snapshots, fuzzing, differential, coverage) | §9 | Not yet applicable (Phases 1+); no contradicting statement | CONSISTENT (planned) |
 | Development phases (ten, sequential, milestones) | §6 | `docs/roadmap.md` now transcribes all ten phases with deliverables, tests, acceptance criteria, estimates, and dependencies | CONSISTENT (was incomplete before Directive 002; PD-001 resolved) |
-| Phase 0 deliverables list | §6 Phase 0 | All implemented except the license selection, which is an owner decision (PD-008) | CONSISTENT with one open owner decision (tracked) |
+| Phase 0 deliverables list | §6 Phase 0 | All Phase 0 deliverables implemented; license selection resolved (PD-008, Directive 003) | CONSISTENT |
 | v1.0 definition of done | §10 | Indexed in `docs/spec.md` §10 | CONSISTENT |
 
 ## 4. Findings
@@ -123,16 +123,19 @@ Preserved, not invented:
 - PD-005 precedence and associativity details (partial: the §3 chain).
 - PD-006 import and visibility semantics (partial: 1 file = 1 module,
   `xl.toml`, `import` form, `pub`, cyclic-import detection in Phase 2).
-- PD-007 source position conventions (Proposed ADR-0002; owner confirmation
-  pending).
-- PD-008 license selection (owner decision).
 - PD-009 public API compatibility policy.
 - PD-010 diagnostics format details (partial: primary span, secondary
   labels, and suggestions required from Phase 2).
 
+PD-007 (source position conventions) and PD-008 (license) were
+subsequently resolved by owner decisions under Directive 003: ADR-0002 is
+now `Accepted`, and the project is dual-licensed under `MIT OR
+Apache-2.0`.
+
 ### 4.4 Audit conclusion
 
-The repository is specification-consistent. The only blocking Phase 0
-matters are owner decisions (license, ADR-0002 confirmation, merge and
-acceptance), not specification contradictions or code defects. This audit
-records no change to any established language semantics.
+The repository is specification-consistent. The remaining Phase 0 matters
+are owner actions (merge and formal acceptance), not specification
+contradictions or code defects; the owner resolved the license and
+ADR-0002 decisions under Directive 003. This audit records no change to any
+established language semantics.

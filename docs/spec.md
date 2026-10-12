@@ -219,9 +219,9 @@ It also sketches, for later phases only, `TokenKind`/`Token`, `Expr` /
 `ExprKind`, the Pratt core loop, the `Op` bytecode enum, and the VM main
 loop. These sketches guide Phases 1–4; they do not authorize implementation
 in Phase 0. The unit of `lo`/`hi`, line/column bases, and invalid-position
-behavior are not defined by the original; the Phase 0 choices are PROPOSED
-in `docs/decisions/adr-0002-source-position-conventions.md` and tracked in
-PD-007.
+behavior are not defined by the original; the Phase 0 choices are recorded
+in `docs/decisions/adr-0002-source-position-conventions.md`, accepted by
+the project owner via Directive 003 (PD-007 resolved).
 
 ## 6. Development phases (original §6) — SPECIFIED
 
@@ -313,7 +313,7 @@ created the workspace plus `xl-span` and `xl-diag` only.
   invalid-position handling, `xl-span` / `xl-diag` public API shapes, the
   plain-text diagnostic rendering format, toolchain pinning and edition,
   dependency direction, and `FileId` map-scoping. Recorded in ADR-0002
-  (Proposed; owner confirmation tracked as PD-007) and ADR-0003 (Accepted
+  (`Accepted` via Directive 003; PD-007 resolved) and ADR-0003 (Accepted
   by delegation of Directive 001).
 - **UNRESOLVED (original silent or partial):** PD-002 through PD-010, with
   PD-002…PD-006 now partially informed by the original. See
