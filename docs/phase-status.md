@@ -24,7 +24,7 @@ See `docs/governance.md` §1.
 | Local format gate | PASS | `cargo fmt --all -- --check` |
 | Local clippy gate (no warnings) | PASS | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Workspace tests | PASS | `cargo test --workspace` — 43 tests, 0 failed |
-| GitHub Actions CI run succeeds | PENDING | Recorded after the workflow run for this revision completes |
+| GitHub Actions CI run succeeds | PASS | Run [38304975381](https://github.com/JoaoGaValentim/xlang/actions/runs/38304975381) — Format, Ubuntu, macOS, and Windows jobs all green on revision `409c4ac`; the head revision after this evidence update is re-verified in PR #1 |
 | No out-of-scope compiler stages implemented | PASS | Code review: Phase 0 crates only |
 | Mandatory licensing decision resolved | BLOCKED | No license selected; owner decision required (PD-008) |
 | Original specification document available in repository | BLOCKED | Not supplied; must be committed before Phase 1 (PD-001) |
@@ -34,5 +34,9 @@ See `docs/governance.md` §1.
 
 - `STATUS` remains `IN_PROGRESS` until owner approval; technical gates
   alone do not complete the phase.
-- CI evidence (workflow URL and revision SHA) is appended to this file
-  after the run completes and is also recorded in the Pull Request.
+- CI evidence: workflow run
+  [38304975381](https://github.com/JoaoGaValentim/xlang/actions/runs/38304975381)
+  completed successfully for revision `409c4ac`; every later revision on
+  the branch is covered by its own run on PR #1. The mandate-level
+  blocking items before approval are PD-001 (original specification
+  document) and PD-008 (license).
