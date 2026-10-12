@@ -1,0 +1,312 @@
+xlang — Especificação e Plano de Engenharia
+Linguagem xlang (arquivos .x) implementada em Rust · Documento de engenharia v0.1 · 12/10/2026
+1. Visão geral
+xlang é uma linguagem compilada, estaticamente tipada e orientada a expressões, com inferência de tipos, tipos algébricos, pattern matching e erros como valores. O compilador (xc) é escrito em Rust, organizado como um workspace de crates pequenos, cada um com contrato claro e testável. A execução começa em uma VM de bytecode e evolui para código nativo via Cranelift.
+Objetivos
+• Sintaxe pequena, sem ambiguidades, parseável por descida recursiva + Pratt.
+• Segurança por padrão: sem null, sem comportamento indefinido em código seguro.
+• Diagnósticos de alta qualidade (spans, rótulos, sugestões).
+• Pipeline modular, determinístico e incremental-friendly.
+• Ferramental de primeira classe: CLI, formatador, LSP, gerenciador de pacotes.
+Não-objetivos da v1.0: concorrência, macros procedurais, borrow checker completo, FFI além de C básico.
+2. Decisões de design
+Tema
+Decisão
+Justificativa
+Tipagem
+Estática; inferência bidirecional + unificação (estilo Hindley-Milner local)
+Ergonomia sem perder previsibilidade
+Memória
+Contagem de referências (Rc) na VM; regiões/ownership simples na fase nativa
+Simplicidade primeiro, otimização depois
+Erros
+Result<T, E> e operador ?; panic apenas para bugs
+Sem exceções, fluxo explícito
+Polimorfismo
+Generics monomorfizados + traits
+Desempenho no backend nativo
+Dados
+struct, enum com payload, tuplas, arrays
+Modelagem expressiva
+Módulos
+1 arquivo .x = 1 módulo; pacotes descritos por xl.toml
+Modelo mental simples
+Sintaxe
+Blocos com {}, instruções terminadas em ;, última expressão do bloco é o valor
+Familiar e sem ambiguidade
+Backends
+Bytecode VM → Cranelift (nativo)
+Feedback rápido, depois performance
+3. A linguagem (esboço)
+import std.io;
+
+struct Point { x: f64, y: f64 }
+
+impl Point {
+    pub fn dist(self, o: Point) -> f64 {
+        let dx = self.x - o.x;
+        let dy = self.y - o.y;
+        (dx * dx + dy * dy).sqrt()
+    }
+}
+
+enum Shape { Circle(f64), Rect(f64, f64) }
+
+fn area(s: Shape) -> f64 {
+    match s {
+        Shape::Circle(r) => 3.14159 * r * r,
+        Shape::Rect(w, h) => w * h,
+    }
+}
+
+fn parse(s: str) -> Result<i64, str> {
+    let n = s.to_int()?;
+    if n < 0 { Err("negativo") } else { Ok(n) }
+}
+
+fn main() {
+    let mut total = 0.0;
+    for i in 0..10 { total += i as f64; }
+    io.println("total = {total}");
+}
+Léxico. Identificadores Unicode (XID), inteiros (1_000, 0xFF, 0b1010), floats, strings com escapes e interpolação {expr}, char, comentários // e /* */ aninhados.
+Palavras-chave. fn let mut if else match while for in loop break continue return struct enum impl trait import pub as true false.
+Tipos primitivos. i8..i64, u8..u64, isize, usize, f32, f64, bool, char, str, (). Compostos: [T], [T; N], (A, B), Option<T>, Result<T, E>, fn(A) -> B.
+Gramática (EBNF resumida)
+module    = { item } ;
+item      = fn_decl | struct_decl | enum_decl | impl_decl | trait_decl | import ;
+fn_decl   = ["pub"] "fn" IDENT [generics] "(" [params] ")" ["->" type] block ;
+block     = "{" { stmt } [expr] "}" ;
+stmt      = "let" ["mut"] pattern [":" type] "=" expr ";" | expr ";" | item ;
+pattern   = "_" | IDENT | literal | path ["(" patterns ")"] | "(" patterns ")" ;
+expr      = (* Pratt: atribuição < || < && < comparação < + - < * / % < unário < pós-fixo *) ;
+postfix   = primary { "(" args ")" | "." IDENT | "[" expr "]" | "?" | "as" type } ;
+4. Arquitetura do compilador
+Pipeline
+Fonte .x → Lexer → tokens → Parser → AST → resolução de nomes + desugaring → HIR → Type checker → HIR tipado → lowering → MIR (grafo de fluxo de controle) → otimizações → Bytecode/VM ou Cranelift/nativo.
+Workspace Cargo
+xlang/
+├─ Cargo.toml                # [workspace]
+├─ crates/
+│  ├─ xl-span/               # FileId, Span, SourceMap
+│  ├─ xl-diag/               # Diagnostic, Label, renderização
+│  ├─ xl-lexer/              # texto -> tokens
+│  ├─ xl-ast/                # nós da AST + visitor
+│  ├─ xl-parser/             # tokens -> AST (recuperação de erros)
+│  ├─ xl-hir/                # resolução de nomes, desugar
+│  ├─ xl-types/              # inferência, traits, exaustividade
+│  ├─ xl-mir/                # CFG, lowering, otimizações
+│  ├─ xl-bytecode/           # Op, Chunk, serialização
+│  ├─ xl-vm/                 # interpretador + runtime
+│  ├─ xl-codegen/            # backend Cranelift
+│  ├─ xl-driver/             # orquestra o pipeline
+│  ├─ xl-fmt/                # formatador
+│  ├─ xl-lsp/                # servidor LSP
+│  └─ xl-cli/                # binário `xc`
+├─ stdlib/                   # biblioteca padrão escrita em .x
+├─ tests/{ui,run-pass,compile-fail}/
+└─ docs/
+Bibliotecas Rust recomendadas: clap (CLI), lasso (interning de símbolos), ariadne ou codespan-reporting (diagnósticos), thiserror, bumpalo (arenas), cranelift-*, tower-lsp, insta (snapshots), proptest, cargo-fuzz, criterion.
+Convenções de implementação
+• IDs newtype (ExprId, DefId, TyId) em vez de ponteiros; dados em arenas/Vec.
+• Todo erro vira Diagnostic com Span; o compilador nunca dá panic por entrada do usuário.
+• Fases são funções puras: fn(&Input) -> (Output, Vec<Diagnostic>).
+• #![forbid(unsafe_code)] em todos os crates, exceto xl-vm e xl-codegen (com revisão e testes sob Miri).
+5. Esqueletos de código-chave
+// xl-span
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Span { pub file: FileId, pub lo: u32, pub hi: u32 }
+
+// xl-lexer
+#[derive(Clone, Debug, PartialEq)]
+pub enum TokenKind {
+    Ident(Symbol), Int(i64), Float(f64), Str(Symbol), Char(char),
+    Fn, Let, Mut, If, Else, Match, While, For, In, Loop, Return,
+    Struct, Enum, Impl, Trait, Import, Pub, As, True, False,
+    Plus, Minus, Star, Slash, Percent, Eq, EqEq, NotEq, Lt, Le, Gt, Ge,
+    AndAnd, OrOr, Bang, Arrow, FatArrow, Question, Dot, DotDot, ColonColon,
+    LParen, RParen, LBrace, RBrace, LBracket, RBracket, Comma, Colon, Semi,
+    Eof,
+}
+pub struct Token { pub kind: TokenKind, pub span: Span }
+
+// xl-ast
+pub struct Expr { pub id: ExprId, pub kind: ExprKind, pub span: Span }
+pub enum ExprKind {
+    Lit(Lit), Path(Path),
+    Unary(UnOp, Box<Expr>), Binary(BinOp, Box<Expr>, Box<Expr>),
+    Call(Box<Expr>, Vec<Expr>), Field(Box<Expr>, Symbol), Index(Box<Expr>, Box<Expr>),
+    If(Box<Expr>, Block, Option<Box<Expr>>), Match(Box<Expr>, Vec<Arm>),
+    Block(Block), Try(Box<Expr>), Cast(Box<Expr>, Type),
+}
+
+// xl-parser: núcleo do parser Pratt
+fn parse_expr_bp(&mut self, min_bp: u8) -> PResult<Expr> {
+    let mut lhs = self.parse_prefix()?;
+    while let Some((l_bp, r_bp, op)) = self.peek_infix() {
+        if l_bp < min_bp { break; }
+        self.bump();
+        let rhs = self.parse_expr_bp(r_bp)?;
+        lhs = Expr::binary(op, lhs, rhs);
+    }
+    Ok(lhs)
+}
+
+// xl-bytecode
+pub enum Op {
+    Const(u32), LoadLocal(u16), StoreLocal(u16), Pop,
+    Add, Sub, Mul, Div, Rem, Neg, Not, Eq, Lt, Le,
+    Jump(u32), JumpIfFalse(u32),
+    Call { func: u32, argc: u8 }, Ret,
+    MakeStruct { ty: u32, n: u16 }, GetField(u16),
+    MakeEnum { tag: u16, n: u16 }, TestTag { tag: u16, target: u32 },
+    Halt,
+}
+
+// xl-vm: laço principal
+loop {
+    match chunk.code[frame.ip] {
+        Op::Const(i)       => stack.push(chunk.consts[i as usize].clone()),
+        Op::Add            => { let b = pop!(); let a = pop!(); stack.push(a.add(b)?); }
+        Op::JumpIfFalse(t) => if !pop!().as_bool() { frame.ip = t as usize; continue; },
+        Op::Call { func, argc } => self.push_frame(func, argc)?,
+        Op::Ret            => if self.pop_frame()? { break },
+        Op::Halt           => break,
+        _ => { /* demais instruções */ }
+    }
+    frame.ip += 1;
+}
+6. Fases de desenvolvimento
+Cada fase termina com um marco executável e critérios de aceite verificáveis em CI. Nenhuma fase começa antes de a anterior estar verde.
+Fase
+Nome
+Duração estimada
+Marco
+0
+Fundação
+1–2 sem
+Workspace, CI, especificação inicial
+1
+Frontend léxico e sintático
+3–4 sem
+xc parse arquivo.x imprime a AST
+2
+Resolução de nomes e tipos
+6–8 sem
+xc check com erros de tipo precisos
+3
+MIR
+3–4 sem
+xc mir imprime o CFG
+4
+VM de bytecode
+4–6 sem
+xc run hello.x executa programas
+5
+Linguagem completa
+8–10 sem
+structs, enums, match, traits, generics
+6
+Runtime e stdlib
+6–8 sem
+Biblioteca padrão e I/O
+7
+Backend nativo
+8–12 sem
+xc build gera executável
+8
+Ferramental
+6–8 sem
+xc fmt, LSP, xc pkg
+9
+Otimização e estabilização
+6–8 sem
+xlang 1.0
+Fase 0 — Fundação
+• Entregáveis: repositório com workspace; xl-span, xl-diag; documento de especificação da sintaxe e semântica (docs/spec.md); CI (GitHub Actions) com cargo fmt --check, clippy -D warnings, cargo test; licença e guia de contribuição; ADRs (registros de decisão de arquitetura).
+• Aceite: cargo test --workspace verde; diagnóstico de exemplo renderizado com span e rótulo.
+Fase 1 — Frontend léxico e sintático
+• Entregáveis: lexer completo (Unicode, literais, comentários aninhados, strings com interpolação); parser de descida recursiva + Pratt para todas as construções da gramática; recuperação de erros (sincronização em ; e }) para reportar vários erros por execução; pretty-printer da AST; xc parse.
+• Testes: snapshots (insta) de tokens e AST; fuzzing do lexer/parser (nenhum panic); propriedade parse(print(ast)) == ast.
+• Aceite: 100% dos exemplos da especificação parseiam; fuzz de 1 h sem falhas.
+Fase 2 — Resolução de nomes e sistema de tipos
+• Entregáveis: lowering AST → HIR com desugaring (for → loop + iterador, ? → match, interpolação → concatenação); tabela de símbolos com escopos e módulos; detecção de nomes duplicados, indefinidos e imports cíclicos; verificador de tipos (seção 7); verificação de exaustividade de match (algoritmo de Maranget); verificação de mutabilidade (let mut).
+• Testes: suíte compile-fail/ em que cada caso tem .x + .stderr esperado.
+• Aceite: mensagens de erro com span primário, rótulos secundários e sugestão (ex.: "você quis dizer foo?").
+Fase 3 — MIR
+• Entregáveis: IR em forma de grafo de fluxo de controle (blocos básicos, locais tipados, terminadores goto/switch/call/return); lowering de HIR tipado para MIR; pattern matching compilado para árvores de decisão; verificador de MIR (sanidade estrutural); passes simples: propagação de constantes, eliminação de código morto, simplificação de CFG.
+• Aceite: verificador de MIR passa em todos os programas de teste; xc mir imprime formato textual estável.
+Fase 4 — VM de bytecode (primeira execução)
+• Entregáveis: xl-bytecode (formato de Chunk, tabela de constantes, serialização .xbc); gerador MIR → bytecode; VM baseada em pilha com quadros de chamada; valores (Int, Float, Bool, Char, Str(Rc<str>), Obj(Rc<..>)); panics com backtrace mapeado para spans; xc run.
+• Testes: run-pass/ com saída esperada (.stdout); benchmarks (fib(35), laços numéricos, ordenação).
+• Aceite: hello.x, fatorial, fibonacci e FizzBuzz executam corretamente; fib(35) abaixo de 2 s.
+Fase 5 — Linguagem completa
+• Entregáveis: struct/enum com payload; impl e métodos; traits com resolução estática e bounds (fn f<T: Ord>(a: T)); generics com monomorfização; closures com captura; tuplas e arrays; Option/Result no prelúdio; operador ?; inferência com integer defaulting; módulos e pub.
+• Aceite: programas de referência (interpretador de expressões, lista ligada, árvore binária, parser JSON) compilam e executam.
+Fase 6 — Runtime e biblioteca padrão
+• Entregáveis: core (Option, Result, Ordering, Iterator); collections (Vec<T>, Map<K,V>, Set<T>); string; math; io (stdin/stdout/stderr); fs; time; env; formatação de valores (Display, Debug); tratamento de panic e código de saída. Estratégia de memória documentada (RC, política para ciclos: Weak<T> explícito).
+• Aceite: stdlib 100% documentada com exemplos executáveis (doctests); cobertura de testes ≥ 85%.
+Fase 7 — Backend nativo
+• Entregáveis: xl-codegen com Cranelift: MIR → IR Cranelift; ABI própria e calling convention documentadas; runtime nativo em Rust (alocador, RC, panics) ligado estaticamente; monomorfização completa; linkagem via cc/lld; xc build e xc build --release; teste diferencial automático VM × nativo (mesma saída para toda a suíte).
+• Aceite: toda a suíte run-pass/ produz saída idêntica nos dois backends; fib(35) nativo em menos de 100 ms.
+Fase 8 — Ferramental
+• Entregáveis: xc fmt (formatador idempotente, baseado em AST + trivia); LSP (tower-lsp): diagnósticos, go-to-definition, hover com tipos, autocompletar, renomear; xc test (funções #[test]); xc doc (HTML a partir de comentários ///); gerenciador de pacotes xc pkg com xl.toml, xl.lock e registro; REPL; gramática TextMate/tree-sitter e extensão de VS Code.
+• Aceite: fmt(fmt(x)) == fmt(x) em toda a base; LSP responde em menos de 100 ms em arquivos de 5 mil linhas.
+Fase 9 — Otimização e estabilização
+• Entregáveis: otimizações no MIR (inlining, CSE, eliminação de bounds checks provados, escape analysis para evitar RC); compilação incremental e cache por módulo; paralelização do type check por módulo; congelamento da especificação, política de versionamento semântico, edições; documentação completa (tutorial, referência, livro); auditoria de segurança com Miri e fuzzing contínuo.
+• Aceite: critérios da seção 10.
+7. Sistema de tipos
+• Inferência: variáveis de tipo frescas, unificação com occurs check, generalização apenas em fn (let-polimorfismo restrito), checagem bidirecional (modo infer e check) para melhorar mensagens.
+• Traits: declaração, impl Trait for Type, bounds; resolução por coerência (uma implementação por par trait/tipo; regra de órfão); associated types na v1.1.
+• Generics: monomorfização no backend; limite de profundidade para evitar expansão infinita.
+• Conversões: sem coerção implícita entre numéricos; as explícito; literais inteiros assumem i64 e float f64 por padrão quando ambíguos.
+• Exaustividade e alcançabilidade de padrões; match não exaustivo é erro.
+• Mutabilidade: let imutável por padrão; atribuição exige mut.
+8. Runtime e modelo de memória
+• VM: valores etiquetados; objetos em Rc<Obj>; strings imutáveis internadas quando pequenas.
+• Nativo: layout de structs C-like; enums como tagged unions; Rc com contador não atômico (sem concorrência na v1); alocador substituível.
+• Falhas: panic imprime mensagem + span + backtrace e sai com código 101; estouro de inteiro verificado em debug, wrapping em release (métodos checked_*, wrapping_* disponíveis).
+9. Qualidade e processo
+Camada
+Prática
+Unitários
+Cada crate com testes próprios; cobertura medida com cargo-llvm-cov
+Snapshots
+Tokens, AST, HIR, MIR, bytecode e diagnósticos com insta
+Integração
+tests/run-pass (stdout esperado) e tests/compile-fail (stderr esperado)
+Fuzzing
+cargo-fuzz no lexer, parser, verificador de bytecode
+Propriedades
+proptest: round-trip parse/print, fmt idempotente
+Diferencial
+VM × nativo sobre toda a suíte
+Desempenho
+criterion + monitoramento de regressão em CI
+Segurança
+Miri em unsafe, cargo-audit, cargo-deny
+Processo
+PRs pequenos, ADRs, changelog, releases semânticos
+10. Riscos e definição de pronto da v1.0
+Riscos principais
+• Escopo do sistema de tipos (traits + generics): mitigar com subconjunto mínimo na Fase 5 e testes de coerência.
+• Complexidade do backend nativo: mitigar mantendo a VM como referência e teste diferencial.
+• Qualidade dos diagnósticos: tratar como requisito, não polimento; testes de .stderr desde a Fase 2.
+• Dívida de design: congelar a sintaxe só após a Fase 5; ADR obrigatório para mudanças.
+Definição de pronto (v1.0)
+1. Especificação publicada e consistente com a implementação.
+2. Suíte de testes completa verde em Linux, macOS e Windows.
+3. VM e backend nativo com comportamento idêntico.
+4. xc com build, run, check, test, fmt, doc e pkg estáveis.
+5. LSP funcional e extensão de VS Code publicada.
+6. Biblioteca padrão documentada, com doctests.
+7. Nenhum panic do compilador em 24 h de fuzzing contínuo.
+8. Programas de referência (parser JSON, interpretador, servidor TCP simples) funcionando.
+11. Primeiros passos práticos
+cargo new --lib xlang && cd xlang
+# transformar em workspace e criar os crates:
+for c in span diag lexer ast parser hir types mir bytecode vm codegen driver fmt lsp; do
+  cargo new --lib crates/xl-$c
+done
+cargo new crates/xl-cli --name xc
+Próximo passo recomendado: implementar xl-span, xl-diag e xl-lexer (Fase 0 e início da Fase 1), com o conjunto de testes de snapshot antes do parser.
