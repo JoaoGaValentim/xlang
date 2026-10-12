@@ -36,8 +36,15 @@ some information, listed; the remaining question is preserved), and
   the compound-assignment operator set must be confirmed; the unary
   operator set is not enumerated.
 - **Impact:** Lexer and parser design in Phase 1.
-- **Status:** PARTIALLY DEFINED — the remaining table must be confirmed by
-  the owner before Phase 1 implements operators.
+- **Phase 1 proposal (pending owner approval):** complete token inventory
+  and gap resolutions — `Break`/`Continue` restoration, the compound
+  assignment family, `Underscore`, and the recovery-only `Error` token — in
+  `docs/proposals/phase-1/grammar-rfc.md` §2; decision-packet row PD-002.
+  Numeric literal payloads (magnitude + radix) require the explicit
+  amendment **B-2**; float overflow policy is **B-3**
+  (`docs/proposals/phase-1/decision-packet.md`, category B).
+- **Status:** PARTIALLY DEFINED — proposal prepared and under owner
+  review; not resolved.
 
 ## PD-003 — Assignment operator semantics
 
@@ -51,7 +58,16 @@ some information, listed; the remaining question is preserved), and
 - **Remaining questions:** all matters listed in the question above; the
   compound-assignment token set (see PD-002).
 - **Impact:** Parser grammar and MIR semantics.
-- **Status:** PARTIALLY DEFINED.
+- **Phase 1 proposal (pending owner approval):** assignment as a
+  syntactically non-associative lowest-tier expression; place-expression
+  LHS validation at parse time, with grouping parentheses transparent
+  (explicit amendment **B-1**); `let` remains the sole declaration. Whether
+  assignment produces a value (proposed: none — a `()` result) is a
+  type-system question deferred with the rest of the type rules, not fixed
+  by the frontend contract — `docs/proposals/phase-1/grammar-rfc.md` §5;
+  decision-packet row PD-003.
+- **Status:** PARTIALLY DEFINED — proposal prepared and under owner
+  review; not resolved.
 
 ## PD-004 — Interpolated string representation
 
@@ -65,7 +81,14 @@ some information, listed; the remaining question is preserved), and
   symbol versus segment list), escaping of literal `{`/`}`, diagnostics
   for malformed interpolation, and the exact AST representation.
 - **Impact:** Lexer/parser; diagnostics for malformed interpolation.
-- **Status:** PARTIALLY DEFINED.
+- **Phase 1 proposal (pending owner approval):** structured `Str` token
+  with lexer-decoded escapes and recursively lexed embedded expressions;
+  `\{`/`\}` escaping; `StringLit { parts }` AST; full diagnostic set —
+  `docs/proposals/phase-1/lexer-contract.md` §5 and
+  `parser-ast-contract.md` §4; decision-packet row PD-004. Nesting and
+  stack-safety limits require the explicit amendment **B-4**.
+- **Status:** PARTIALLY DEFINED — proposal prepared and under owner
+  review; not resolved.
 
 ## PD-005 — Operator precedence
 
@@ -78,8 +101,13 @@ some information, listed; the remaining question is preserved), and
   of the range operator `..` (used in `for i in 0..10`); the exact unary
   operator set.
 - **Impact:** Parser; silently wrong parses are a correctness hazard.
-- **Status:** PARTIALLY DEFINED — must be completed before Phase 1 parses
-  expressions.
+- **Phase 1 proposal (pending owner approval):** complete Pratt
+  binding-power table; `..` between assignment and `||`;
+  non-associative assignment/range/comparison with dedicated diagnostics;
+  postfix `as`; concrete precedence examples —
+  `docs/proposals/phase-1/grammar-rfc.md` §4; decision-packet row PD-005.
+- **Status:** PARTIALLY DEFINED — proposal prepared and under owner
+  review; not resolved.
 
 ## PD-006 — Import and visibility semantics
 
@@ -94,7 +122,14 @@ some information, listed; the remaining question is preserved), and
   path syntax inside imports (the examples use `.` while expressions use
   `::`), and whether items are private by default.
 - **Impact:** Name resolution, HIR.
-- **Status:** PARTIALLY DEFINED.
+- **Phase 1 proposal (pending owner approval):** `import module_path ["as"
+  IDENT];` with dotted paths; `::` reserved for expression/type paths;
+  `pub` placement fixed; unsupported forms (groups, wildcard, `::` in
+  imports, re-exports) rejected with diagnostics; resolution semantics
+  deferred to Phase 2 — `docs/proposals/phase-1/grammar-rfc.md` §6;
+  decision-packet row PD-006.
+- **Status:** PARTIALLY DEFINED — proposal prepared and under owner
+  review; not resolved.
 
 ## PD-007 — Source offset and column conventions
 
