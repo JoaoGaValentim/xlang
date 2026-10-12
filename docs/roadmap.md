@@ -7,15 +7,15 @@ begins before the previous one is green and the project owner issues a
 directive authorizing it** (`docs/governance.md` §1). Estimates are from the
 original and are not commitments.
 
-Status legend: **IMPLEMENTED** · **IN PROGRESS** · **NOT STARTED**.
+Status legend: **ACCEPTED** · **DESIGN GATE** · **NOT STARTED**.
 Planned content below describes what a phase is authorized to build when it
 begins; the existence of a roadmap item does not authorize its
 implementation.
 
 | Phase | Name | Original estimate | Milestone (original §6) | Status |
 | --- | --- | --- | --- | --- |
-| 0 | Foundation (*Fundação*) | 1–2 weeks | Workspace, CI, initial specification | IN PROGRESS — awaiting owner decisions; see `docs/phase-status.md` |
-| 1 | Lexical and syntactic frontend (*Frontend léxico e sintático*) | 3–4 weeks | `xc parse arquivo.x` prints the AST | NOT STARTED |
+| 0 | Foundation (*Fundação*) | 1–2 weeks | Workspace, CI, initial specification | ACCEPTED — integrated via PR #1 (merge `4d82106`); see `docs/phase-status.md` |
+| 1 | Lexical and syntactic frontend (*Frontend léxico e sintático*) | 3–4 weeks | `xc parse arquivo.x` prints the AST | DESIGN GATE — syntax contracts proposed (`docs/proposals/phase-1/`), pending owner approval; implementation NOT AUTHORIZED |
 | 2 | Name resolution and types (*Resolução de nomes e tipos*) | 6–8 weeks | `xc check` with precise type errors | NOT STARTED |
 | 3 | MIR | 3–4 weeks | `xc mir` prints the CFG | NOT STARTED |
 | 4 | Bytecode VM (*VM de bytecode*) | 4–6 weeks | `xc run hello.x` executes programs | NOT STARTED |
@@ -29,7 +29,7 @@ Dependencies for every phase: the previous phase must be green (all CI
 gates pass on the delivered revision) and the project owner must issue a
 directive authorizing the phase.
 
-## Phase 0 — Foundation — IN PROGRESS
+## Phase 0 — Foundation — ACCEPTED
 
 Original deliverables (original §6):
 
@@ -46,19 +46,23 @@ Original acceptance criteria (original §6):
 - `cargo test --workspace` green.
 - A sample diagnostic rendered with span and label.
 
-Current state (2026-10-12, Directives 002–003):
+Final state (2026-10-12, Directives 002–004):
 
-- Workspace, `xl-span`, `xl-diag`, CI, contribution guide, and ADR records:
-  implemented and verified — evidence in `docs/phase-status.md`.
+- All deliverables implemented and verified; PR #1 merged as `4d82106`
+  with green CI; the project owner formally accepted Phase 0 (Directive 004
+  §2, integration condition satisfied). Evidence in `docs/phase-status.md`.
 - `docs/spec.md`: reconciled with the archival original (PD-001 resolved).
-- License: dual `MIT OR Apache-2.0` selected and implemented (PD-008
-  resolved, Directive 003).
-- ADR-0002 (source position conventions): accepted by the project owner
-  (PD-007 resolved, Directive 003).
+- License: dual `MIT OR Apache-2.0` (PD-008 resolved, Directive 003).
+- ADR-0002 (source position conventions): accepted (PD-007 resolved,
+  Directive 003).
 
-No Phase 1 work of any kind has been performed.
+## Phase 1 — Lexical and syntactic frontend — DESIGN GATE
 
-## Phase 1 — Lexical and syntactic frontend — NOT STARTED
+The design gate is active (Directive 004 §3): the proposed lexical,
+grammatical, parser/AST, and conformance contracts are in
+`docs/proposals/phase-1/` and require owner approval
+(`docs/proposals/phase-1/decision-packet.md`). **No implementation is
+authorized**; no lexer, parser, AST, or CLI code exists.
 
 Scope and deliverables (original §6):
 
@@ -76,8 +80,11 @@ the lexer/parser (no panics); the property `parse(print(ast)) == ast`.
 Acceptance criteria (original §6): 100% of the specification examples parse;
 1 hour of fuzzing without failures.
 
-Dependencies: Phase 0 green and owner authorization. Detailed operator and
-precedence questions must be resolved first (PD-002, PD-003, PD-005).
+Dependencies: Phase 0 accepted (satisfied). The design gate is active: the
+proposed contracts in `docs/proposals/phase-1/` require owner approval
+before implementation, and an implementation directive is still required.
+The former open questions (PD-002…PD-006) are addressed by those proposals
+and remain formally open until the owner approves the decision packet.
 
 ## Phase 2 — Name resolution and type system — NOT STARTED
 
