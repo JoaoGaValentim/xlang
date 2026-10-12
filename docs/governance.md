@@ -115,12 +115,9 @@ A phase is acceptable only when, at minimum:
 
 - `main` is the integration branch. **Policy:** all changes land through a
   Pull Request targeting `main`; direct commits to `main` are not
-  authorized. **Enforcement status (verified 2026-10-12):** GitHub-side
-  branch protection and rulesets are *not* configured on this repository,
-  so the policy is currently upheld by process and review only. No document
-  may describe `main` as technically protected until enforcement is
-  enabled. Enabling branch protection is an owner action; the recommended
-  configuration is recorded at the end of this section.
+  authorized. **Enforcement status (verified 2026-10-12):** branch
+  protection is **active** on `main` — the owner authorized and applied the
+  settings recorded at the end of this section (Directive 003).
 - Phase branches follow `phase/<number>-<description>`.
 - The PR template must be filled in completely, including CI evidence.
 - Required checks must be green; a Pull Request must not be merged while
@@ -129,26 +126,27 @@ A phase is acceptable only when, at minimum:
   owner provides final authorization. (INV-017)
 - Force pushes and history rewrites on `main` are prohibited. (INV-013)
 
-### Recommended branch protection for `main` (owner action)
+### Branch protection for `main` (active)
 
-The required status checks must use the actual CI job names produced by
-`.github/workflows/ci.yml`:
+Applied on 2026-10-12 with owner authorization (Directive 003) and verified
+through the GitHub API. Effective settings:
 
-- `Format`
-- `Check (ubuntu-latest)`
-- `Check (windows-latest)`
-- `Check (macos-latest)`
+- Require a pull request before merging, with **zero mandatory independent
+  approvals** (single-maintainer project: GitHub does not allow Pull
+  Request authors to approve their own Pull Requests, and no other eligible
+  reviewer exists).
+- Require these status checks (actual CI job names from
+  `.github/workflows/ci.yml`), with “require branches to be up to date
+  before merging” enabled:
+  - `Format`
+  - `Check (ubuntu-latest)`
+  - `Check (windows-latest)`
+  - `Check (macos-latest)`
+- Force pushes blocked; branch deletion blocked.
+- Administrators are subject to these protections, so required checks
+  cannot be bypassed.
 
-Recommended rule settings:
-
-- Require a pull request before merging (at least 1 approval).
-- Require status checks to pass, selecting the four checks above, and
-  require branches to be up to date before merging.
-- Block force pushes and block branch deletion.
-- Do not allow bypassing the above settings.
-
-These settings were verified as not applied on 2026-10-12; they require the
-project owner's action and are not changed by automation.
+Changes to this configuration are owner actions.
 
 ## 10. Specification change control
 
