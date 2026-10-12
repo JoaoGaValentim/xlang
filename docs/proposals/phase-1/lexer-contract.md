@@ -82,11 +82,24 @@ bin_int    = ("0b" | "0B") bin_digit { bin_digit | "_" bin_digit } ;
   prefixes and hex digits are accepted (PROPOSED, low risk).
 - Leading zeros are permitted in decimal (`007` = 7) — PROPOSED (no rule in
   the original against them).
-- Value semantics: the literal's value must fit `i64` (SPECIFIED type list;
-  default integer type is `i64`, §7). Out-of-range values are a diagnostic
-  (`integer literal out of range for i64`), reported with the literal span;
-  the token is still produced with a saturated/`0` placeholder value for
-  recovery determinism.
+- **Value representation (amendment B-2; departs from the §5 sketch's
+  `Int(i64)` payload — PROPOSED):** the token carries the literal's
+  **magnitude** (`u64`) and its **radix** (2, 10, 16). The lexer performs
+  only the representability check “magnitude ≤ `u64::MAX`”; signed-range
+  and target-type validation (whether a value fits `i64`, `u8`, or a
+  `u64` binding, and the sign interaction with unary minus) is deferred to
+  the type-system phase, where integer literal defaulting (`i64`, §7) and
+  casts are defined. Rationale: `-9223372036854775808` (i64::MIN) has
+  magnitude `2^63` > `i64::MAX`; a lexer bounded to `i64` would reject a
+  syntactically valid, representable value before the unary minus is
+  applied. Preserving magnitude and radix also keeps unsigned targets and
+  explicit casts implementable.
+- Magnitudes above `u64::MAX` are a diagnostic
+  (`integer literal is too large`); the recovery token is
+  `TokenKind::Error` (explicitly erroneous), **never** a substituted
+  `Int(0)` — later stages must not mistake it for a value.
+- `Radix` is retained for diagnostics and canonical printing (`0x`/`0b`
+  prefixes; decimal otherwise); the printer emits no underscores.
 - No suffixes (`1i64`, `1u8`) and no octal literals (not evidenced;
   UNRESOLVED).
 
@@ -103,10 +116,17 @@ exponent   = ("e" | "E") [ "+" | "-" ] dec_int ;
 - `1.` and `.5` are **not** floats: `1.` lexes as `Int(1)` then `.`
   (field-access token); `.5` lexes as `.` then `Int(5)` (a parse error
   later). Rationale: keeps `1..2` (range) unambiguous; see §6.
-- Value semantics: parsed as `f64` (SPECIFIED default float type). Overflow
-  to infinity is accepted and yields `f64::INFINITY` (PROPOSED; no
-  diagnostic — IEEE semantics documented; the exact policy is trivially
-  changeable and noted for the owner).
+- **Value policy (amendment B-3; PROPOSED):** a `Float` token always carries
+  a **finite** `f64`. A literal whose decimal value rounds to infinity
+  (e.g. `1e9999`) is diagnosed
+  (`floating-point literal is not representable`) and recovered as
+  `TokenKind::Error` — never as a substituted value. Rationale: `f64`
+  cannot represent it, and the canonical printer must not emit `inf`, which
+  is not XLANG literal syntax; rejecting keeps the invariant “every
+  accepted literal re-parses to an equal value”. Underflow that rounds to
+  zero (e.g. `1e-9999` → `0.0`) is accepted; the stored value round-trips
+  (`0.0` prints as `0.0`). The asymmetry is deliberate and documented for
+  the owner (packet B-3).
 
 ## 5. Strings, characters, escapes, and interpolation (PD-004)
 
@@ -181,10 +201,20 @@ Rules (PROPOSED):
     `StringPart::Text(String) | StringPart::Expr(Expr)`
     (`parser-ast-contract.md` §4). Phase 2 desugars interpolation to
     concatenation (SPECIFIED §6 Phase 2). Phase 1 performs no desugaring.
-11. **Depth safety:** interpolation nesting is bounded by the source
-    length; the implementation must avoid unbounded recursion (or prove
-    stack safety under fuzzing). Implementation note only — no semantic
-    limit is proposed (a hard limit would be a specification change).
+11. **Resource and stack safety (amendment B-4; PROPOSED):** recursive
+    lexing must not exhaust the native stack for any input. Source length
+    alone is **not** a bound on stack use, so this contract requires an
+    explicit, input-independent bound: the lexer enforces a constant
+    `MAX_INTERPOLATION_DEPTH` (proposed value: **64**) on nested
+    interpolation, with processing at each level bounded and deterministic.
+    Exceeding the limit produces the diagnostic
+    `interpolation nesting limit (64) exceeded` with the primary span at
+    the offending `{`, then recovers by consuming to the balancing `}` (or
+    EOF) and emitting an `Error` token — never a panic. The limit is an
+    implementation-safety policy, not language semantics, and is a fuzz
+    obligation (§9). The parser mirrors this for expression/type/pattern
+    nesting (`MAX_PARSE_DEPTH`, proposed 64) per
+    `parser-ast-contract.md` §4.
 
 ### 5.3 Permitted example forms
 
@@ -195,6 +225,10 @@ Rules (PROPOSED):
 | `"literal \{brace\}"` | text `literal {brace}` |
 | `"{f(1)}"` | expr `f(1)` (call inside interpolation) |
 | `"{ if x { 1 } else { 2 } }"` | expr with nested blocks (brace depth) |
+| `"a { "b {c} d" } e"` | nested interpolation through an embedded string (inner braces are inside the string token) |
+| `"{ f() /* } */ }"` | `}` inside an embedded comment does not close the interpolation |
+| `"{ "abc }"` | embedded string unterminated → inner `unterminated string literal` plus outer `unterminated interpolation…` |
+| (string with > 64 nested `{`) | `interpolation nesting limit (64) exceeded` (B-4) |
 | `"{}"` | parser diagnostic: empty interpolation |
 | `"oops` | lexer diagnostic: unterminated string literal |
 
@@ -210,7 +244,7 @@ Rules (PROPOSED):
 - **Structured `Str` token with embedded token sequences (recommended):**
   one token in, one AST node out; spans are absolute and correct; lexer
   stays parser-independent. Cost: a recursive lexer entry point, bounded by
-  input size. Chosen.
+  the explicit depth limit of §5.2(11) (B-4). Chosen.
 
 ## 6. Maximal munch and disambiguation rules
 
@@ -272,15 +306,31 @@ Proposed diagnostic catalog (message template / primary span / recovery):
 | Unterminated block comment | `unterminated block comment` | outer `/*` → EOF | resume at EOF |
 | Malformed integer (e.g. `0x`) | `expected digits after '0x'` | the prefix | emit `Error`, resume after prefix |
 | Misplaced underscore | `'_' must appear between digits` | offending `_` | emit `Error`, resume at next non-digit |
-| Integer overflow | `integer literal out of range for i64` | literal | value 0 placeholder |
+| Integer magnitude too large | `integer literal is too large` | literal | emit `Error` (explicitly erroneous; **no** value substitution) |
+| Float not representable | `floating-point literal is not representable` | literal | emit `Error` |
+| Interpolation nesting limit | `interpolation nesting limit (64) exceeded` | offending `{` | consume to balancing `}`/EOF; emit `Error` |
 | Empty/multi char literal | `a character literal must contain exactly one character` | literal | emit `Error` |
 
 ## 9. Fuzzing and test contract (for the implementation phase)
 
 - Lexer fuzz target: arbitrary bytes (valid UTF-8 `&str` unify) must never
-  panic, never loop forever, and always emit exactly one trailing `Eof`;
-  concatenated token spans must cover the input minus trivia; every token
-  span must lie on UTF-8 boundaries (`xl-span` validation is the oracle).
+  panic (including **no stack overflow** — the B-4 depth limits apply),
+  never loop forever, and always emit exactly one trailing `Eof`.
+- **Span invariants (corrected per Directive 005 §9; the structured `Str`
+  token nests spans, so a single flat non-overlap rule cannot hold):**
+  - *Top level:* token spans are non-overlapping and strictly increasing;
+    their union plus trivia covers the input. The single `Eof` token has a
+    zero-width span at `source.len()` and is never contained in another
+    token's span.
+  - *Inside a `Str` token:* the token span covers the full literal
+    including both quotes. Text-segment and interpolation-segment spans
+    partition the interior (between the quotes), non-overlapping; each
+    embedded token span lies inside its interpolation segment,
+    non-overlapping among themselves, covering that segment minus trivia.
+  - *Trivia:* skipped at top level and inside interpolation segments; no
+    trivia span overlaps an emitted token or segment span.
+  - *Boundaries:* every emitted span (top-level, segment, embedded) lies on
+    UTF-8 character boundaries (`xl-span` lookups are the oracle).
 - Snapshot tests: token streams (kinds + spans) and diagnostics for the
   conformance corpus (`conformance-plan.md`).
 - Property: `lex` is deterministic — two runs yield identical output.
