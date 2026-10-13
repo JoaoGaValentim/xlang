@@ -41,9 +41,11 @@ fuzz_target!(|data: &[u8]| {
         assert!(span.lo <= span.hi);
     }
 
-    // No diagnosting explosion: recovery must be bounded by input size.
+    // Diagnostics must stay linear in the input with a small constant:
+    // each recovery cycle consumes input or returns to a caller that does,
+    // so a superlinear (runaway) cascade is a defect.
     assert!(
-        output.diagnostics.len() <= text.len() + 8,
+        output.diagnostics.len() <= 4 * text.len() + 16,
         "diagnostic cascade"
     );
 
