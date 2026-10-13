@@ -1,0 +1,14 @@
+---
+source: crates/xl-parser/tests/snapshots.rs
+expression: parsed.rendered()
+---
+error: empty interpolation
+ --> test.x:2:14
+  |
+2 |     let a = "{}";
+  |              ^^
+error: expected '}'
+ --> test.x:3:17
+  |
+3 |     let b = "{1 2}";
+  |                 ^

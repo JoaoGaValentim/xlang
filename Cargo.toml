@@ -1,6 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/xl-span", "crates/xl-diag", "crates/xl-lexer", "crates/xl-ast"]
+members = [
+    "crates/xl-span",
+    "crates/xl-diag",
+    "crates/xl-lexer",
+    "crates/xl-ast",
+    "crates/xl-parser",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -14,6 +20,8 @@ publish = false
 xl-span = { path = "crates/xl-span" }
 xl-diag = { path = "crates/xl-diag" }
 xl-ast = { path = "crates/xl-ast" }
+xl-lexer = { path = "crates/xl-lexer" }
+xl-parser = { path = "crates/xl-parser" }
 unicode-ident = "1.0"
 insta = "1"
 proptest = "1"

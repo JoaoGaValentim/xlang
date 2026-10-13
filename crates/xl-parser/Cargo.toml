@@ -1,0 +1,19 @@
+[package]
+name = "xl-parser"
+description = "Syntactic parser (tokens to AST) for the XLANG compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+xl-span.workspace = true
+xl-diag.workspace = true
+xl-lexer.workspace = true
+xl-ast.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+proptest.workspace = true
