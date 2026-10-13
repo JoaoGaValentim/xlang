@@ -1,0 +1,25 @@
+---
+source: crates/xl-lexer/tests/snapshots.rs
+expression: dump_tokens(source)
+---
+   0..1    Int(0, Dec)
+   2..7    Int(1000, Dec)
+   8..11   Int(7, Dec)
+  12..16   Int(255, Hex)
+  17..24   Int(65535, Hex)
+  25..31   Int(10, Bin)
+  32..51   Int(9223372036854775808, Dec)
+  52..72   Int(18446744073709551615, Dec)
+  73..76   Float(0.0)
+  77..84   Float(3.14159)
+  85..90   Float(1500.0)
+  91..94   Float(100000.0)
+  95..100  Float(1e300)
+ 101..108  Float(0.0)
+ 109..110  Int(1, Dec)
+ 110..112  DotDot
+ 112..113  Int(2, Dec)
+ 114..115  Int(1, Dec)
+ 115..116  Dot
+ 116..119  Ident(foo)
+ 119..119  Eof

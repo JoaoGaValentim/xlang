@@ -1,6 +1,6 @@
 # XLANG Phase 1 — Conformance Plan
 
-**STATUS: PROPOSED — OWNER REVIEW REQUIRED**
+**STATUS: ACCEPTED — OWNER DIRECTIVE 006**
 
 - **Directive:** Engineering Directive 004 (created), corrected under
   Directive 005 — Syntax Contract Finalization (2026-10-12).

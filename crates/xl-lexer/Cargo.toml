@@ -1,0 +1,18 @@
+[package]
+name = "xl-lexer"
+description = "Lexical analysis (source text to tokens) for the XLANG compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+xl-span.workspace = true
+xl-diag.workspace = true
+unicode-ident.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+proptest.workspace = true

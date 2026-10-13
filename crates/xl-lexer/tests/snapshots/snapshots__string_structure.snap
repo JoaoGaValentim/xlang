@@ -1,0 +1,20 @@
+---
+source: crates/xl-lexer/tests/snapshots.rs
+expression: dump_string_token(source)
+---
+Str@0..55
+  Text@1..9 "total = "
+  Interp open@9..10 close@15..16
+    10..15 Ident(total)
+  Text@16..24 " nested "
+  Interp open@24..25 close@49..50
+    25..27 If
+    28..32 Ident(flag)
+    33..34 LBrace
+    35..36 Int(1, Dec)
+    37..38 RBrace
+    39..43 Else
+    44..45 LBrace
+    46..47 Int(2, Dec)
+    48..49 RBrace
+  Text@50..54 " end"

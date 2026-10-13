@@ -1,6 +1,6 @@
 # XLANG Phase 1 — Parser and AST Contract
 
-**STATUS: PROPOSED — OWNER REVIEW REQUIRED**
+**STATUS: ACCEPTED — OWNER DIRECTIVE 006**
 
 - **Directive:** Engineering Directive 004 — Phase 1 Syntax Architecture and
   Specification Gate (2026-10-12)

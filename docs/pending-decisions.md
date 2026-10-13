@@ -43,8 +43,13 @@ some information, listed; the remaining question is preserved), and
   Numeric literal payloads (magnitude + radix) require the explicit
   amendment **B-2**; float overflow policy is **B-3**
   (`docs/proposals/phase-1/decision-packet.md`, category B).
-- **Status:** PARTIALLY DEFINED — proposal prepared and under owner
-  review; not resolved.
+- **Status:** **RESOLVED (2026-10-12, Directive 006).** The owner approved
+  the token inventory in `docs/proposals/phase-1/grammar-rfc.md` §2:
+  `Break`/`Continue` restoration, compound assignment family, `Underscore`,
+  and the internal `Error` token; numeric literal payloads are approved as
+  amendment B-2 and the float policy as B-3. No bitwise, shift, or
+  inclusive-range operators are authorized. Ratification record in the
+  decision packet.
 
 ## PD-003 — Assignment operator semantics
 
@@ -66,8 +71,12 @@ some information, listed; the remaining question is preserved), and
   type-system question deferred with the rest of the type rules, not fixed
   by the frontend contract — `docs/proposals/phase-1/grammar-rfc.md` §5;
   decision-packet row PD-003.
-- **Status:** PARTIALLY DEFINED — proposal prepared and under owner
-  review; not resolved.
+- **Status:** **RESOLVED (2026-10-12, Directive 006).** The owner approved
+  the assignment syntax: expression form, lowest precedence,
+  non-associative unparenthesized chains, place-expression targets with
+  grouping parentheses transparent (B-1), and `let` as declaration syntax.
+  Assignment parsing and type checking remain future work. Ratification
+  record in the decision packet.
 
 ## PD-004 — Interpolated string representation
 
@@ -86,9 +95,14 @@ some information, listed; the remaining question is preserved), and
   `\{`/`\}` escaping; `StringLit { parts }` AST; full diagnostic set —
   `docs/proposals/phase-1/lexer-contract.md` §5 and
   `parser-ast-contract.md` §4; decision-packet row PD-004. Nesting and
-  stack-safety limits require the explicit amendment **B-4**.
-- **Status:** PARTIALLY DEFINED — proposal prepared and under owner
-  review; not resolved.
+  stack-safety limits require the   explicit amendment **B-4**.
+- **Status:** **RESOLVED (2026-10-12, Directive 006).** The owner approved
+  the structured string design: structured `Str` tokens, decoded literal
+  segments, embedded expression token sequences, absolute UTF-8 spans,
+  escaped literal braces, and deterministic lexical diagnostics; nesting
+  and stack safety follow the clarified B-4 limits
+  (`MAX_INTERPOLATION_DEPTH = 64`) and the span invariant in
+  `lexer-contract.md` §5.5. Ratification record in the decision packet.
 
 ## PD-005 — Operator precedence
 
@@ -105,9 +119,11 @@ some information, listed; the remaining question is preserved), and
   binding-power table; `..` between assignment and `||`;
   non-associative assignment/range/comparison with dedicated diagnostics;
   postfix `as`; concrete precedence examples —
-  `docs/proposals/phase-1/grammar-rfc.md` §4; decision-packet row PD-005.
-- **Status:** PARTIALLY DEFINED — proposal prepared and under owner
-  review; not resolved.
+  `docs/proposals/phase-1/grammar-rfc.md` §4;   decision-packet row PD-005.
+- **Status:** **RESOLVED (2026-10-12, Directive 006).** The owner approved
+  the precedence and associativity table in
+  `docs/proposals/phase-1/grammar-rfc.md` §4 as a binding contract for the
+  future parser. Ratification record in the decision packet.
 
 ## PD-006 — Import and visibility semantics
 
@@ -128,8 +144,11 @@ some information, listed; the remaining question is preserved), and
   imports, re-exports) rejected with diagnostics; resolution semantics
   deferred to Phase 2 — `docs/proposals/phase-1/grammar-rfc.md` §6;
   decision-packet row PD-006.
-- **Status:** PARTIALLY DEFINED — proposal prepared and under owner
-  review; not resolved.
+- **Status:** **RESOLVED (2026-10-12, Directive 006).** The owner approved
+  the syntactic rules: `import module_path ["as" IDENT];` with dotted
+  paths, `::` expression/type paths, fixed `pub` placement. Name
+  resolution and visibility enforcement remain outside Phase 1.
+  Ratification record in the decision packet.
 
 ## PD-007 — Source offset and column conventions
 

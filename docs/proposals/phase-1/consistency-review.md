@@ -1,6 +1,6 @@
 # XLANG Phase 1 — Consistency Review (Directive 005)
 
-**STATUS: PROPOSED — OWNER REVIEW REQUIRED**
+**STATUS: RECORDED — OWNER DIRECTIVE 006 RATIFICATION**
 
 - **Directive:** Engineering Directive 005 — Phase 1 Contract Correction,
   Grammar Consistency Hardening, and Final Design Review (2026-10-12).
