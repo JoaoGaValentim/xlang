@@ -1052,3 +1052,39 @@ fn accumulate(digits: &str, base: u64) -> Option<u64> {
     }
     Some(acc)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{accumulate, misplaced_in_run};
+
+    #[test]
+    fn underscore_runs_accept_separated_digits() {
+        assert_eq!(misplaced_in_run(""), None);
+        assert_eq!(misplaced_in_run("123"), None);
+        assert_eq!(misplaced_in_run("1_000"), None);
+        assert_eq!(misplaced_in_run("F_F"), None);
+    }
+
+    #[test]
+    fn underscore_runs_report_the_first_violation() {
+        assert_eq!(misplaced_in_run("_1"), Some(0));
+        assert_eq!(misplaced_in_run("1_"), Some(1));
+        assert_eq!(misplaced_in_run("1__0"), Some(1));
+        assert_eq!(misplaced_in_run("1_0_"), Some(3));
+    }
+
+    #[test]
+    fn accumulate_supports_decimal_hex_and_binary() {
+        assert_eq!(accumulate("0", 10), Some(0));
+        assert_eq!(accumulate("1000", 10), Some(1000));
+        assert_eq!(accumulate("FF", 16), Some(255));
+        assert_eq!(accumulate("1010", 2), Some(10));
+    }
+
+    #[test]
+    fn accumulate_detects_u64_overflow() {
+        assert_eq!(accumulate("18446744073709551615", 10), Some(u64::MAX));
+        assert_eq!(accumulate("18446744073709551616", 10), None);
+        assert_eq!(accumulate("FFFFFFFFFFFFFFFFF", 16), None);
+    }
+}
