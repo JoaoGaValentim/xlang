@@ -470,6 +470,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "xl-ast"
+version = "0.1.0"
+dependencies = [
+ "insta",
+ "xl-lexer",
+ "xl-span",
+]
+
+[[package]]
 name = "xl-diag"
 version = "0.1.0"
 dependencies = [

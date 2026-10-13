@@ -227,7 +227,8 @@ Rules (PROPOSED):
 | `"{ if x { 1 } else { 2 } }"` | expr with nested blocks (brace depth) |
 | `"a { "b {c} d" } e"` | nested interpolation through an embedded string (inner braces are inside the string token) |
 | `"{ f() /* } */ }"` | `}` inside an embedded comment does not close the interpolation |
-| `"{ "abc }"` | embedded string unterminated → inner `unterminated string literal` plus outer `unterminated interpolation…` |
+| `"{ "abc }"` | the inner string consumes `}"` as content and closes at the final quote; the outer interpolation is unterminated at EOF (erratum corrected per Directive 007 §11; pinned by `inner_string_consumes_brace_until_its_own_close`) |
+| `"{ "abc }` (no final quote) | inner `unterminated string literal` plus outer `unterminated interpolation in string literal` |
 | (string with > 64 nested `{`) | `interpolation nesting limit (64) exceeded` (B-4) |
 | `"{}"` | parser diagnostic: empty interpolation |
 | `"oops` | lexer diagnostic: unterminated string literal |

@@ -12,12 +12,14 @@ Source → Lexer → Parser → AST → Name Resolution / HIR → Type Checking
 Execution backends: a bytecode VM first, Cranelift-generated native code
 as a subsequent backend.
 
-## 2. Implemented subset (Phase 0)
+## 2. Implemented subset (Phases 0–1)
 
-Phase 0 implements only the compiler's source-location and diagnostics
-foundation. **No lexer, parser, AST, HIR, type checking, MIR, bytecode,
-VM, native code generation, standard library, formatter, LSP, or package
-management code exists in this repository.**
+Phase 0 implements the source-location and diagnostics foundation;
+Phase 1 implements the lexical frontend (`xl-lexer`, integrated via PR #3)
+and the syntax tree with canonical printing and structural validation
+(`xl-ast`, Directive 007). **No parser, CLI, HIR, type checking, MIR,
+bytecode, VM, native code generation, standard library, formatter, LSP, or
+package management code exists in this repository.**
 
 ```text
 ┌──────────────────────────┐
@@ -28,15 +30,26 @@ management code exists in this repository.**
 ┌────────────▼─────────────┐
 │ xl-diag                  │  Severity, Label, Diagnostic, deterministic
 │ (diagnostics infra)      │  source-aware text rendering
-└──────────────────────────┘
+└────────────┬─────────────┘
+             │ depends on
+┌────────────▼─────────────┐
+│ xl-lexer                 │  Token/TokenKind, structured strings with
+│ (lexical frontend)       │  interpolation, deterministic diagnostics
+└──────────────────────────┘   (future xl-parser depends on this)
+
+┌──────────────────────────┐
+│ xl-ast                   │  Item/Stmt/Expr/Pat/Type model, canonical
+│ (syntax tree + printer)  │  printer, structural validator
+└──────────────────────────┘   (depends on xl-span only)
 ```
 
-Dependency direction: `xl-diag → xl-span`. `xl-span` must never depend on
-`xl-diag` or on any future compiler-phase crate. Both crates build with
+Dependency direction: `xl-lexer → {xl-span, xl-diag}` and
+`xl-ast → xl-span`; the future `xl-parser` will depend on both. Foundation
+crates must never depend on later-phase crates. All crates build with
 `#![forbid(unsafe_code)]` and hold no global mutable state; every piece of
 compiler state is owned by the caller and passed explicitly.
 
-## 3. Public contracts (Phase 0)
+## 3. Public contracts
 
 ### `xl-span`
 
@@ -68,6 +81,44 @@ and column conventions.
 - `render(&Diagnostic, &SourceMap) -> String` — deterministic plain-text
   rendering; unresolvable spans produce an explicit placeholder instead of
   a panic.
+
+### `xl-lexer`
+
+- `lex(&SourceFile, FileId) -> LexOutput { tokens, diagnostics }` and the
+  `lex_file(&SourceMap, FileId)` convenience — total, deterministic, never
+  panics; exactly one final `Eof` token in the top-level stream.
+- `Token { kind, span }` / `TokenKind` — identifiers (owned `String`; no
+  global interner), integer literals (`IntLit { magnitude, radix }`, B-2),
+  finite floats (B-3), characters, structured strings
+  (`StrLit { parts }` with `Text`/`Interp` segments and absolute spans,
+  §5.5 invariants), all keywords/operators/delimiters, `Underscore`,
+  `Error` (recovery), `Eof`.
+- Interpolation recursion is bounded by `MAX_INTERPOLATION_DEPTH = 64`
+  (B-4); comments use iterative depth counting.
+- Dependencies: `xl-span`, `xl-diag`, `unicode-ident`. No parser
+  dependency.
+
+### `xl-ast`
+
+- `Item` (root: a parsed file is a sequence of items) and the full
+  `StmtKind`/`ExprKind`/`PatKind`/`TypeKind` model of the accepted
+  grammar; `Block { stmts, tail }` keeps the tail expression separate by
+  construction.
+- Node identifiers (`ItemId`, `ExprId`) are parser-assigned and
+  **instance-scoped** (not globally unique); `xl-ast` performs no
+  allocation.
+- `print_item`/`print_items`/`print_expr`/`print_type`/`print_pattern`/
+  `print_block` — deterministic canonical printer preserving tree
+  structure under the accepted precedence and statement/tail rules;
+  structured `PrintError` for malformed or over-deep trees
+  (`MAX_PRINT_DEPTH = 128`); `inf`/`NaN` are never emitted.
+- `validate_item`/`validate_expr`/`validate_type`/`validate_pattern` —
+  structural `Violation` reports (span sanity/containment, file
+  consistency, required names/paths/generics, tail ordering,
+  interpolation ordering, `MAX_VALIDATE_DEPTH = 128`); no name resolution
+  or typing.
+- Dependencies: `xl-span` only (`xl-lexer` is a dev-only test dependency
+  used to re-lex printed output).
 
 ## 4. Design principles
 
