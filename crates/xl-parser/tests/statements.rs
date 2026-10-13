@@ -114,8 +114,18 @@ fn let_forms() {
 
 #[test]
 fn let_without_initializer_reports_expected_eq() {
+    // After the missing initializer the parser recovers to the statement
+    // end; the block's `}` closes without a cascading `expected ';'`
+    // (anti-cascade recovery, N2 shape: initializer placeholder, sync at
+    // the statement end).
     let parsed = common::parse_source("fn f() { let x }");
-    assert_eq!(parsed.messages(), vec!["expected '='", "expected ';'"]);
+    assert_eq!(parsed.messages(), vec!["expected '='"]);
+}
+
+#[test]
+fn let_with_initializer_missing_semicolon_reports_it() {
+    let parsed = common::parse_source("fn f() { let x = 1 let y = 2; }");
+    assert_eq!(parsed.messages(), vec!["expected ';'"]);
 }
 
 #[test]
