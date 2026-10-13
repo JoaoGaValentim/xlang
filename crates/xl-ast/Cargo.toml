@@ -1,0 +1,20 @@
+[package]
+name = "xl-ast"
+description = "Syntax tree data model and canonical printing for the XLANG compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+xl-span.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+# Dev-only: the printing suites re-lex printed output to prove it is
+# lexically consistent XLANG source. Production code has no lexer
+# dependency (Directive 007 §5); the future parser translates lexical
+# payloads at its own boundary.
+xl-lexer = { path = "../xl-lexer" }
