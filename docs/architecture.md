@@ -15,11 +15,12 @@ as a subsequent backend.
 ## 2. Implemented subset (Phases 0–1)
 
 Phase 0 implements the source-location and diagnostics foundation;
-Phase 1 implements the lexical frontend (`xl-lexer`, integrated via PR #3)
-and the syntax tree with canonical printing and structural validation
-(`xl-ast`, Directive 007). **No parser, CLI, HIR, type checking, MIR,
-bytecode, VM, native code generation, standard library, formatter, LSP, or
-package management code exists in this repository.**
+Phase 1 implements the lexical frontend (`xl-lexer`, integrated via PR #3),
+the syntax tree with canonical printing and structural validation
+(`xl-ast`, integrated via PR #4), and the syntactic parser
+(`xl-parser`, Directive 008, pending owner review). **No CLI, HIR, type
+checking, MIR, bytecode, VM, native code generation, standard library,
+formatter, LSP, or package management code exists in this repository.**
 
 ```text
 ┌──────────────────────────┐
@@ -35,7 +36,12 @@ package management code exists in this repository.**
 ┌────────────▼─────────────┐
 │ xl-lexer                 │  Token/TokenKind, structured strings with
 │ (lexical frontend)       │  interpolation, deterministic diagnostics
-└──────────────────────────┘   (future xl-parser depends on this)
+└────────────┬─────────────┘
+             │ depends on
+┌────────────▼─────────────┐
+│ xl-parser                │  tokens → xl-ast items + diagnostics;
+│ (syntactic frontend)     │  Pratt expressions, recovery, depth limits
+└──────────────────────────┘   (future xl-cli depends on this)
 
 ┌──────────────────────────┐
 │ xl-ast                   │  Item/Stmt/Expr/Pat/Type model, canonical
@@ -43,9 +49,10 @@ package management code exists in this repository.**
 └──────────────────────────┘   (depends on xl-span only)
 ```
 
-Dependency direction: `xl-lexer → {xl-span, xl-diag}` and
-`xl-ast → xl-span`; the future `xl-parser` will depend on both. Foundation
-crates must never depend on later-phase crates. All crates build with
+Dependency direction: `xl-lexer → {xl-span, xl-diag}`,
+`xl-ast → xl-span`, and `xl-parser → {xl-lexer, xl-ast, xl-span, xl-diag}`;
+the future `xl-cli` will depend on the parser. Foundation crates must
+never depend on later-phase crates. All crates build with
 `#![forbid(unsafe_code)]` and hold no global mutable state; every piece of
 compiler state is owned by the caller and passed explicitly.
 
@@ -119,6 +126,36 @@ and column conventions.
   or typing.
 - Dependencies: `xl-span` only (`xl-lexer` is a dev-only test dependency
   used to re-lex printed output).
+
+### `xl-parser`
+
+- `parse(&SourceFile, FileId) -> ParseOutput { items, diagnostics }` runs
+  the full pipeline (lex + parse); `parse_file(&SourceMap, FileId)` is the
+  lookup convenience; `parse_tokens(&[Token], FileId)` parses an existing
+  stream (lexical diagnostics then remain the caller's responsibility).
+  Diagnostic order is deterministic: lexical (scan order) then syntactic
+  (parse order); `has_errors`/`error_count` summarize severity.
+- The parser is a recursive-descent item/statement/block parser with a
+  Pratt expression loop using the ratified binding powers; non-associative
+  tiers (assignment, range, comparison) are enforced explicitly with the
+  accepted diagnostics and recovery shapes (right-nested assignment,
+  left-nested range/comparison). Grouping is transparent in the AST but
+  not to chain detection.
+- All recursion (expressions, types, patterns, blocks, items, generic
+  arguments, interpolation interiors) shares one budget,
+  `MAX_PARSE_DEPTH = 64` (B-4); exceeding it produces
+  `expression nesting limit (64) exceeded`, skips to the expression
+  synchronization set, and continues.
+- Recovery uses the ratified synchronization sets; recovered constructs
+  are zero-width placeholder nodes at deterministic insertion points and
+  are never presented as successful parses (empty identifiers make
+  canonical printing report `InvalidStructure`).
+- Node identifiers are allocated in construction order per AST instance
+  (saturating counters; never global). Generic closing implements the G-3
+  rule: `>=` is split into `>` + `=` only in type-closing context, with
+  byte-exact residual spans (no token dropped or duplicated).
+- Dependencies: `xl-lexer`, `xl-ast`, `xl-span`, `xl-diag`. No CLI or
+  later-stage dependency; no name resolution, typing, or desugaring.
 
 ## 4. Design principles
 

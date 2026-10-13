@@ -3,9 +3,9 @@
 ```text
 CURRENT_PHASE: 1
 PHASE_NAME:    Lexical and Syntactic Frontend
-STATUS:        IN PROGRESS — contracts ratified; lexer integrated;
-               AST IMPLEMENTED (PENDING OWNER REVIEW);
-               parser/CLI NOT AUTHORIZED
+STATUS:        IN PROGRESS — contracts ratified; lexer and AST integrated;
+               PARSER IMPLEMENTED (PENDING OWNER REVIEW);
+               CLI NOT STARTED
 ```
 
 A phase may transition to `APPROVED` only after all required acceptance
@@ -36,6 +36,16 @@ criteria have been verified and the project owner has approved advancement
   `xl-ast` (data model, canonical printer, structural validator) is
   complete and pending owner review via PR #4. `xl-parser` and `xc parse`
   remain **NOT AUTHORIZED / NOT STARTED**.
+- **Phase 1 — AST INTEGRATED** (PR #4, merge
+  `df9e859175b94ae19f5b3998a0160da230ba77a3`, 2026-10-13T13:48:01Z):
+  integration CI run
+  [38407939639](https://github.com/JoaoGaValentim/xlang/actions/runs/38407939639)
+  green on all four jobs; `main` contains `xl-lexer` and `xl-ast`.
+- **Phase 1 — PARSER IMPLEMENTED** (Directive 008, branch
+  `phase/1-parser`): the syntactic parser crate `xl-parser` (recursive
+  descent + Pratt expressions, ratified recovery sets, shared
+  `MAX_PARSE_DEPTH = 64`, G-3 generic closing, interpolation integration)
+  is implemented and pending owner review. `xc parse` is **NOT STARTED**.
 
 ## Phase 0 closure record (final — Directives 002–004, 2026-10-12)
 
@@ -83,9 +93,10 @@ criteria have been verified and the project owner has approved advancement
 | PD-002 through PD-006 | RESOLVED (Directive 006) | `docs/pending-decisions.md` |
 | ADR for the ratified syntax contract | ACCEPTED | `docs/decisions/adr-0004-phase-1-syntax-contract.md` |
 | `xl-lexer` implementation | IMPLEMENTED — INTEGRATED (Directive 006) | `crates/xl-lexer`; merged via PR #3 (merge `9ed50ad`); 104 lexer tests (148 workspace-wide at merge, 0 failed); CI runs 38328242463 (`d2972b8`) and 38328884949 (`d48a622`) green on all four jobs |
-| `xl-ast` implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 007) | `crates/xl-ast`; data model + canonical printer + structural validator; 94 AST tests (242 workspace-wide, 0 failed; CI-observed 242); 3 insta snapshots; CI run 38337088059 (`702f140`) green on all four jobs |
+| `xl-ast` implementation | IMPLEMENTED — INTEGRATED (Directive 007) | `crates/xl-ast`; data model + canonical printer + structural validator; 94 AST tests (242 workspace-wide, 0 failed; CI-observed 242); 3 insta snapshots; merged via PR #4 (merge `df9e859`; integration CI run 38407939639, all four jobs green) |
+| `xl-parser` implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 008) | `crates/xl-parser`; recursive descent + Pratt expressions, ratified recovery sets, shared `MAX_PARSE_DEPTH = 64`, G-3 generic closing, interpolation integration; 132 parser tests (374 workspace-wide, 0 failed locally); 4 insta snapshots; spec example parses clean and round-trips; PR #5 pending owner review |
 | `xl-lexer` fuzz harness (preliminary evidence) | PASS — preliminary only | `fuzz/`; 1,848,945 runs in 61 s on the local nightly toolchain, zero crashes and zero artifacts. NOT the Phase 1 acceptance criterion: the specification's lexer/parser fuzzing gate cannot pass without the parser |
-| `xl-parser`, `xc parse` | NOT AUTHORIZED / NOT STARTED | Directives 004 §3, 005, 006, 007 |
+| `xl-parser`, `xc parse` | `xl-parser` IMPLEMENTED — PENDING OWNER REVIEW; `xc parse` NOT STARTED | Directive 008 (parser authorized); CLI remains unauthorized (Directives 004–007) |
 | Phase 1 docs CI (proposal set) | PASS | PR #2 merged as `db2437b`; run 38323917744 all four jobs green |
 
 ## Notes
@@ -93,18 +104,22 @@ criteria have been verified and the project owner has approved advancement
 - Phase 0 is complete and integrated; the archived original specification
   and accepted ADRs are frozen except by owner decision.
 - The Phase 1 contracts are ratified (Directive 006; ADR-0004). The lexer
-  is integrated (PR #3) and the AST is implemented pending owner review
-  (PR #4); `xl-parser` and `xc parse` remain unauthorized, so the Phase 1
-  acceptance criteria (all specification examples parse; combined
-  lexer/parser fuzzing) cannot yet be claimed.
+  and the AST are integrated (PR #3, PR #4); the parser is implemented and
+  pending owner review (PR #5); `xc parse` remains not started, so the
+  Phase 1 acceptance criteria (all specification examples parse; combined
+  lexer/parser fuzzing) are not yet fully claimed.
 - The lexer-contract example erratum was **corrected editorially** under
   Directive 007 §11: the `"{ "abc }"` row now describes the implemented,
   accepted behavior (pinned by the test
   `inner_string_consumes_brace_until_its_own_close`); lexical semantics
   were not changed.
-- Parser-based `parse(print(ast)) ≡ ast` round-trip testing is recorded as
-  a **mandatory future integration gate**; nothing in this repository
-  fabricates parser results, and the current evidence is lexical-shape
-  equivalence only.
+- Parser-based `parse(print(ast)) ≡ ast` round-trip testing was the
+  mandatory future integration gate recorded under Directive 007; the
+  parser implementation closes it for the corpus and generated programs
+  (`crates/xl-parser/tests/roundtrip.rs`, `properties.rs`), with spans and
+  parser-assigned identifiers excluded per the ratified equivalence
+  relation.
 - The `xl-lexer` fuzz run is preliminary evidence only; no fabricated or
-  extrapolated fuzzing results are recorded.
+  extrapolated fuzzing results are recorded. A combined lexer/parser fuzz
+  target exists (`fuzz/fuzz_targets/lex_parse.rs`); its executed evidence
+  is recorded separately when complete.

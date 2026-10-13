@@ -16,7 +16,7 @@ implementation.
 | Phase | Name | Original estimate | Milestone (original §6) | Status |
 | --- | --- | --- | --- | --- |
 | 0 | Foundation (*Fundação*) | 1–2 weeks | Workspace, CI, initial specification | ACCEPTED — integrated via PR #1 (merge `4d82106`); see `docs/phase-status.md` |
-| 1 | Lexical and syntactic frontend (*Frontend léxico e sintático*) | 3–4 weeks | `xc parse arquivo.x` prints the AST | IN PROGRESS — contracts ratified (Directive 006); lexer integrated (PR #3, merge `9ed50ad`); AST implemented, pending owner review (Directive 007); parser/CLI not started |
+| 1 | Lexical and syntactic frontend (*Frontend léxico e sintático*) | 3–4 weeks | `xc parse arquivo.x` prints the AST | IN PROGRESS — contracts ratified (Directive 006); lexer and AST integrated (PR #3, PR #4); parser implemented, pending owner review (Directive 008); CLI not started |
 | 2 | Name resolution and types (*Resolução de nomes e tipos*) | 6–8 weeks | `xc check` with precise type errors | NOT STARTED |
 | 3 | MIR | 3–4 weeks | `xc mir` prints the CFG | NOT STARTED |
 | 4 | Bytecode VM (*VM de bytecode*) | 4–6 weeks | `xc run hello.x` executes programs | NOT STARTED |
@@ -60,12 +60,12 @@ Final state (2026-10-12, Directives 002–004):
 ## Phase 1 — Lexical and syntactic frontend — IN PROGRESS
 
 Contracts ratified (Directive 006; ADR-0004). The lexical frontend
-(`xl-lexer`) is implemented and integrated (PR #3, merge `9ed50ad`); the
-syntax tree with canonical printing and structural validation (`xl-ast`)
-is implemented and pending owner review (Directive 007). The parser and
-CLI remain **not authorized / not started**; the Phase 1 acceptance
-criteria (all specification examples parse; combined lexer/parser
-fuzzing) therefore cannot yet be claimed.
+(`xl-lexer`) and the syntax tree (`xl-ast`) are implemented and integrated
+(PR #3, PR #4); the syntactic parser (`xl-parser`, Directive 008) is
+implemented and pending owner review. The CLI (`xc parse`) remains
+**not started**; the Phase 1 acceptance criteria (all specification
+examples parse; 1 hour of combined lexer/parser fuzzing without failures)
+therefore cannot yet be fully claimed.
 
 Scope and deliverables (original §6):
 
