@@ -3,8 +3,8 @@
 ```text
 CURRENT_PHASE: 1
 PHASE_NAME:    Lexical and Syntactic Frontend
-STATUS:        DESIGN GATE — proposals pending owner approval;
-               implementation NOT AUTHORIZED
+STATUS:        IN PROGRESS — contracts ratified (Directive 006);
+               lexer stage authorized; parser/AST/CLI NOT AUTHORIZED
 ```
 
 A phase may transition to `APPROVED` only after all required acceptance
@@ -21,9 +21,13 @@ criteria have been verified and the project owner has approved advancement
   2026-10-12T21:59:52Z) and the `main` CI run for the merge commit is green
   (run [38314053579](https://github.com/JoaoGaValentim/xlang/actions/runs/38314053579),
   all four jobs). Acceptance is therefore in effect.
-- **Phase 1 — DESIGN GATE ACTIVE** (Directive 004 §3): syntax contracts
-  proposed under `docs/proposals/phase-1/`, pending owner review.
-  **No Phase 1 implementation is authorized.**
+- **Phase 1 — CONTRACTS RATIFIED** (Directive 006): the proposal set under
+  `docs/proposals/phase-1/` was merged via PR #2 (merge commit
+  `db2437b660225b78d5b008bf64a8d68a0f2c7049`) and ratified by the owner
+  (proposal status `ACCEPTED — OWNER DIRECTIVE 006`; ADR-0004; PD-002
+  through PD-006 resolved). The `xl-lexer` implementation stage is
+  authorized (Directive 006); `xl-ast`, `xl-parser`, and `xc parse` remain
+  **NOT AUTHORIZED**.
 
 ## Phase 0 closure record (final — Directives 002–004, 2026-10-12)
 
@@ -58,19 +62,21 @@ criteria have been verified and the project owner has approved advancement
 | Branch protection enforced on `main` | PASS | API-verified settings (`docs/governance.md` §9); PR #1 merged through it |
 | Project owner approval | PASS | Directive 004 §2 acceptance (condition satisfied) |
 
-## Phase 1 — design-gate record
+## Phase 1 — contract and implementation record
 
 | Item | Status | Evidence / pointer |
 | --- | --- | --- |
-| Grammar RFC (token inventory, grammar, precedence, structural gaps) | PROPOSED — OWNER REVIEW REQUIRED | `docs/proposals/phase-1/grammar-rfc.md` |
-| Lexer contract | PROPOSED — OWNER REVIEW REQUIRED | `docs/proposals/phase-1/lexer-contract.md` |
-| Parser and AST contract | PROPOSED — OWNER REVIEW REQUIRED | `docs/proposals/phase-1/parser-ast-contract.md` |
-| Conformance plan | PROPOSED — OWNER REVIEW REQUIRED | `docs/proposals/phase-1/conformance-plan.md` |
-| Decision packet (categories A/B/C: PD-002…PD-006, G-1…G-4, B-1…B-4) | PROPOSED — OWNER REVIEW REQUIRED | `docs/proposals/phase-1/decision-packet.md` |
-| Consistency review (Directive 005 corrections) | PROPOSED — OWNER REVIEW REQUIRED | `docs/proposals/phase-1/consistency-review.md` |
-| PD-002 through PD-006 | PROPOSALS PREPARED — NOT RESOLVED | `docs/pending-decisions.md`; packet rows |
-| Phase 1 implementation (`xl-lexer`, `xl-ast`, `xl-parser`, `xc parse`) | NOT AUTHORIZED | Directives 004 §3 and 005; no new crates exist |
-| Phase 1 docs CI | See PR #2 | GitHub Actions run on the PR head |
+| Grammar RFC (token inventory, grammar, precedence, structural gaps) | ACCEPTED — OWNER DIRECTIVE 006 | `docs/proposals/phase-1/grammar-rfc.md` |
+| Lexer contract | ACCEPTED — OWNER DIRECTIVE 006 | `docs/proposals/phase-1/lexer-contract.md` (span invariant §5.5) |
+| Parser and AST contract | ACCEPTED — OWNER DIRECTIVE 006 | `docs/proposals/phase-1/parser-ast-contract.md` |
+| Conformance plan | ACCEPTED — OWNER DIRECTIVE 006 | `docs/proposals/phase-1/conformance-plan.md` |
+| Decision packet (categories A/B/C: PD-002…PD-006, G-1…G-4, B-1…B-4) | ACCEPTED — OWNER DIRECTIVE 006 | `docs/proposals/phase-1/decision-packet.md` (ratification record) |
+| Consistency review (Directive 005 corrections) | RECORDED — OWNER DIRECTIVE 006 RATIFICATION | `docs/proposals/phase-1/consistency-review.md` |
+| PD-002 through PD-006 | RESOLVED (Directive 006) | `docs/pending-decisions.md` |
+| ADR for the ratified syntax contract | ACCEPTED | `docs/decisions/adr-0004-phase-1-syntax-contract.md` |
+| `xl-lexer` implementation | AUTHORIZED — DIRECTIVE 006 (in progress) | `crates/xl-lexer` (this branch) |
+| `xl-ast`, `xl-parser`, `xc parse` | NOT AUTHORIZED / NOT STARTED | Directives 004 §3, 005, 006 |
+| Phase 1 docs CI (proposal set) | PASS | PR #2 merged as `db2437b`; run 38323917744 all four jobs green |
 
 ## Notes
 

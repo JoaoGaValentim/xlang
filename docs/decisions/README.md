@@ -36,3 +36,4 @@ An ADR is never marked `Accepted` merely because implementation was easier
 | [0001](adr-0001-crate-layout-and-dependency-direction.md) | Crate layout and dependency direction | Accepted — mandated by Directive 001 |
 | [0002](adr-0002-source-position-conventions.md) | Source position conventions | Accepted — owner approval via Directive 003 |
 | [0003](adr-0003-toolchain-and-edition.md) | Toolchain pinning and Rust edition | Accepted — delegated by Directive 001 |
+| [0004](adr-0004-phase-1-syntax-contract.md) | Ratified Phase 1 syntax contract | Accepted — owner approval via Directive 006 |

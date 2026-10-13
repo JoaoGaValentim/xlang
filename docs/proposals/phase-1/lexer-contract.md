@@ -1,6 +1,6 @@
 # XLANG Phase 1 — Lexer Contract
 
-**STATUS: PROPOSED — OWNER REVIEW REQUIRED**
+**STATUS: ACCEPTED — OWNER DIRECTIVE 006**
 
 - **Directive:** Engineering Directive 004 — Phase 1 Syntax Architecture and
   Specification Gate (2026-10-12)
@@ -246,6 +246,39 @@ Rules (PROPOSED):
   stays parser-independent. Cost: a recursive lexer entry point, bounded by
   the explicit depth limit of §5.2(11) (B-4). Chosen.
 
+### 5.5 Span invariant clarification (Directive 006)
+
+Precise accounting for structured strings (refines §5.2 and replaces the
+summary at §9 for the nested levels; the UTF-8 boundary guarantees are
+unchanged):
+
+1. The outer `Str` token spans the complete string literal, including both
+   quotes.
+2. The literal interior (between the quotes) is partitioned exactly by
+   text-segment spans and interpolation-delimiter spans:
+   - a text segment's span covers its raw source bytes (decoded text may be
+     shorter than the span when escapes are present);
+   - an interpolation contributes its opening `{` span and its closing `}`
+     span as **separately accounted delimiters** (`Interpolation::open` /
+     `Interpolation::close`).
+3. **Embedded expression tokens exclude the delimiter braces** and exclude
+   trivia: they cover exactly the lexical content between the delimiters.
+4. Nested token spans (embedded tokens, and `Str` tokens nested inside
+   embedded expressions) are contained within their parent interpolation's
+   interior; inner strings repeat rules 1–3 at their own level.
+5. **EOF handling is explicit per independently tokenized stream:** only
+   the top-level stream ends with a single `Eof` token (zero-width at
+   `source.len()`). Embedded expression streams contain **no `Eof` token**;
+   they terminate at their closing `}`. If EOF is reached before the
+   closing `}`, the parent emits `unterminated interpolation in string
+   literal`, sets `Interpolation::close` to a zero-width span at EOF, and
+   appends one `Error` token (zero-width, same position) to the embedded
+   tokens as an explicit abnormal-termination marker; the outer `Str` token
+   then spans to EOF.
+6. Top-level non-overlap applies only to top-level tokens; nested levels
+   obey rules 1–5. No invariant claims non-overlap between a parent token
+   and its embedded tokens. (Directive 006 §4 correction.)
+
 ## 6. Maximal munch and disambiguation rules
 
 1. Longest match applies to operators: `==`, `!=`, `<=`, `>=`, `&&`, `||`,
@@ -322,11 +355,12 @@ Proposed diagnostic catalog (message template / primary span / recovery):
     their union plus trivia covers the input. The single `Eof` token has a
     zero-width span at `source.len()` and is never contained in another
     token's span.
-  - *Inside a `Str` token:* the token span covers the full literal
-    including both quotes. Text-segment and interpolation-segment spans
-    partition the interior (between the quotes), non-overlapping; each
-    embedded token span lies inside its interpolation segment,
-    non-overlapping among themselves, covering that segment minus trivia.
+  - *Inside a `Str` token:* governed by §5.5 — the literal interior is
+    partitioned by text-segment spans plus interpolation-delimiter spans
+    (`open`/`close`); embedded tokens exclude the delimiters and trivia,
+    lie inside their interpolation, and are non-overlapping among
+    themselves; embedded streams contain no `Eof` (explicit EOF marker
+    rules in §5.5(5)).
   - *Trivia:* skipped at top level and inside interpolation segments; no
     trivia span overlaps an emitted token or segment span.
   - *Boundaries:* every emitted span (top-level, segment, embedded) lies on

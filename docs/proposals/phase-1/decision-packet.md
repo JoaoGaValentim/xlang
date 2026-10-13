@@ -1,6 +1,6 @@
 # XLANG Phase 1 — Decision Packet
 
-**STATUS: PROPOSED — OWNER REVIEW REQUIRED**
+**STATUS: ACCEPTED — OWNER DIRECTIVE 006**
 
 - **Directive:** Engineering Directive 004 (created), corrected and
   restructured under Directive 005 — Syntax Contract Finalization
@@ -13,11 +13,34 @@
   `parser-ast-contract.md`, `conformance-plan.md`,
   `consistency-review.md` (this directory).
 
-**No decision here is approved.** PD-002 through PD-006 remain
-`PARTIALLY DEFINED` in `docs/pending-decisions.md` until the owner records
-approval. Approving this packet authorizes the *contracts*; it does **not**
-authorize implementation, which requires a separate implementation
-directive.
+## Ratification record (Directive 006, 2026-10-12)
+
+The project owner ratified this packet via Engineering Directive 006:
+
+- **Category A — APPROVED as proposed:** PD-002, PD-003, PD-004, PD-005,
+  PD-006, G-1 (syntax only), G-2 (corrected order), G-3, G-4.
+- **Category B — APPROVED:** B-1 as corrected (parentheses transparent);
+  B-2 as recommended (magnitude + radix; no signed restrictions in the
+  lexer; no valid-looking zero substitution); B-3 as recommended
+  (finite-only floats; overflow diagnosed; underflow accepted; parseable
+  round-trip printing); B-4 approved **with clarifications** — initial
+  limits `MAX_INTERPOLATION_DEPTH = 64` and future `MAX_PARSE_DEPTH = 64`;
+  the future parser guard must cover *all* recursive syntax paths (types,
+  patterns, blocks, nested items, generics) and recursive AST printing must
+  also be stack-safe; nested comments use an iterative depth counter;
+  limits must produce controlled diagnostics, never stack overflow; bounded
+  recovery must guarantee forward progress and termination; adversarial
+  inputs must be tested.
+- **Category C — unchanged:** deferred; G-5 (struct literals) remains
+  UNRESOLVED.
+- **Additional clarification recorded:** the structured-interpolation span
+  invariant (`lexer-contract.md` §5.7) — embedded tokens exclude the
+  interpolation's delimiter braces, delimiter spans are accounted
+  separately, and EOF handling is explicit per independently tokenized
+  stream.
+
+Approval authorizes the *contracts* and the `xl-lexer` implementation stage
+only (Directive 006); the parser, AST, and CLI remain unauthorized.
 
 ---
 
