@@ -1,0 +1,45 @@
+---
+source: crates/xl-lexer/tests/snapshots.rs
+expression: dump_diagnostics(source)
+---
+error: unexpected character '~'
+ --> test.x:1:1
+  |
+1 | ~ "abc
+  | ^
+---
+error: unterminated string literal
+ --> test.x:1:3
+  |
+1 | ~ "abc
+  |   ^^^^
+---
+error: expected digits after '0x'
+ --> test.x:2:1
+  |
+2 | 0x 1_ 18446744073709551616 1e9999 /* open
+  | ^^
+---
+error: '_' must appear between digits
+ --> test.x:2:5
+  |
+2 | 0x 1_ 18446744073709551616 1e9999 /* open
+  |     ^
+---
+error: integer literal is too large
+ --> test.x:2:7
+  |
+2 | 0x 1_ 18446744073709551616 1e9999 /* open
+  |       ^^^^^^^^^^^^^^^^^^^^
+---
+error: floating-point literal is not representable
+ --> test.x:2:28
+  |
+2 | 0x 1_ 18446744073709551616 1e9999 /* open
+  |                            ^^^^^^
+---
+error: unterminated block comment
+ --> test.x:2:35
+  |
+2 | 0x 1_ 18446744073709551616 1e9999 /* open
+  |                                   ^^^^^^^
