@@ -1,0 +1,22 @@
+[package]
+name = "xlang-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+xl-lexer = { path = "../crates/xl-lexer" }
+xl-span = { path = "../crates/xl-span" }
+
+[[bin]]
+name = "lex_tokens"
+path = "fuzz_targets/lex_tokens.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
