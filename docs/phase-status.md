@@ -3,8 +3,9 @@
 ```text
 CURRENT_PHASE: 1
 PHASE_NAME:    Lexical and Syntactic Frontend
-STATUS:        IN PROGRESS — contracts ratified; lexer IMPLEMENTED
-               (PENDING OWNER REVIEW); parser/AST/CLI NOT AUTHORIZED
+STATUS:        IN PROGRESS — contracts ratified; lexer integrated;
+               AST IMPLEMENTED (PENDING OWNER REVIEW);
+               parser/CLI NOT AUTHORIZED
 ```
 
 A phase may transition to `APPROVED` only after all required acceptance
@@ -25,9 +26,16 @@ criteria have been verified and the project owner has approved advancement
   `docs/proposals/phase-1/` was merged via PR #2 (merge commit
   `db2437b660225b78d5b008bf64a8d68a0f2c7049`) and ratified by the owner
   (proposal status `ACCEPTED — OWNER DIRECTIVE 006`; ADR-0004; PD-002
-  through PD-006 resolved). The `xl-lexer` implementation stage is
-  authorized (Directive 006); `xl-ast`, `xl-parser`, and `xc parse` remain
-  **NOT AUTHORIZED**.
+  through PD-006 resolved). The `xl-lexer` implementation stage was
+  authorized (Directive 006); `xl-ast`, `xl-parser`, and `xc parse`
+  remained unauthorized at that point.
+- **Phase 1 — LEXER INTEGRATED** (PR #3, merge
+  `9ed50ad1bfd52965fba1e007ee15dfe877c9ee58`, 2026-10-13): the lexical
+  frontend is on `main` with green CI and preliminary fuzz evidence.
+- **Phase 1 — AST IMPLEMENTED** (Directive 007): the syntax tree crate
+  `xl-ast` (data model, canonical printer, structural validator) is
+  complete and pending owner review via PR #4. `xl-parser` and `xc parse`
+  remain **NOT AUTHORIZED / NOT STARTED**.
 
 ## Phase 0 closure record (final — Directives 002–004, 2026-10-12)
 
@@ -74,9 +82,10 @@ criteria have been verified and the project owner has approved advancement
 | Consistency review (Directive 005 corrections) | RECORDED — OWNER DIRECTIVE 006 RATIFICATION | `docs/proposals/phase-1/consistency-review.md` |
 | PD-002 through PD-006 | RESOLVED (Directive 006) | `docs/pending-decisions.md` |
 | ADR for the ratified syntax contract | ACCEPTED | `docs/decisions/adr-0004-phase-1-syntax-contract.md` |
-| `xl-lexer` implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 006) | `crates/xl-lexer`; 104 lexer tests (148 workspace-wide, 0 failed); CI runs 38328242463 (`d2972b8`) and 38328884949 (`d48a622`) green on all four jobs |
+| `xl-lexer` implementation | IMPLEMENTED — INTEGRATED (Directive 006) | `crates/xl-lexer`; merged via PR #3 (merge `9ed50ad`); 104 lexer tests (148 workspace-wide at merge, 0 failed); CI runs 38328242463 (`d2972b8`) and 38328884949 (`d48a622`) green on all four jobs |
+| `xl-ast` implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 007) | `crates/xl-ast`; data model + canonical printer + structural validator; 94 AST tests (242 workspace-wide, 0 failed); 3 insta snapshots; CI run on PR #4 |
 | `xl-lexer` fuzz harness (preliminary evidence) | PASS — preliminary only | `fuzz/`; 1,848,945 runs in 61 s on the local nightly toolchain, zero crashes and zero artifacts. NOT the Phase 1 acceptance criterion: the specification's lexer/parser fuzzing gate cannot pass without the parser |
-| `xl-ast`, `xl-parser`, `xc parse` | NOT AUTHORIZED / NOT STARTED | Directives 004 §3, 005, 006 |
+| `xl-parser`, `xc parse` | NOT AUTHORIZED / NOT STARTED | Directives 004 §3, 005, 006, 007 |
 | Phase 1 docs CI (proposal set) | PASS | PR #2 merged as `db2437b`; run 38323917744 all four jobs green |
 
 ## Notes
@@ -84,14 +93,18 @@ criteria have been verified and the project owner has approved advancement
 - Phase 0 is complete and integrated; the archived original specification
   and accepted ADRs are frozen except by owner decision.
 - The Phase 1 contracts are ratified (Directive 006; ADR-0004). The lexer
-  implementation is complete and awaiting owner review (PR #3); `xl-ast`,
-  `xl-parser`, and `xc parse` remain unauthorized, so the Phase 1
+  is integrated (PR #3) and the AST is implemented pending owner review
+  (PR #4); `xl-parser` and `xc parse` remain unauthorized, so the Phase 1
   acceptance criteria (all specification examples parse; combined
   lexer/parser fuzzing) cannot yet be claimed.
-- Known documentation erratum (disclosed; no rule changed): the
-  illustrative row `"{ "abc }"` in the accepted `lexer-contract.md` §5.3
-  disagrees with the contract's own scanning rules; the actual behavior is
-  pinned by the test `inner_string_consumes_brace_until_its_own_close`.
-  Correcting the example requires an owner decision.
+- The lexer-contract example erratum was **corrected editorially** under
+  Directive 007 §11: the `"{ "abc }"` row now describes the implemented,
+  accepted behavior (pinned by the test
+  `inner_string_consumes_brace_until_its_own_close`); lexical semantics
+  were not changed.
+- Parser-based `parse(print(ast)) ≡ ast` round-trip testing is recorded as
+  a **mandatory future integration gate**; nothing in this repository
+  fabricates parser results, and the current evidence is lexical-shape
+  equivalence only.
 - The `xl-lexer` fuzz run is preliminary evidence only; no fabricated or
   extrapolated fuzzing results are recorded.
