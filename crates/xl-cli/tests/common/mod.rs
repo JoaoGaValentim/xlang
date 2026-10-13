@@ -23,12 +23,42 @@ pub const EXIT_OPERATIONAL: i32 = 2;
 /// `examples/program.x`. The conformance suites require these bytes to
 /// appear unmodified inside `docs/spec-v0.1-original.txt` §3, so the
 /// example cannot be substituted or shortened silently.
+///
+/// Git may check text files out with CRLF on Windows even though the
+/// committed blobs use LF; use [`spec_example`] for byte-level comparisons
+/// against CLI output.
 pub const SPEC_EXAMPLE: &str = include_str!("../../../../examples/program.x");
 
 /// The canonical printer output for [`SPEC_EXAMPLE`], byte-for-byte; the
 /// fixture is identical to the accepted `xl-parser` canonical snapshot
 /// (`snapshots__spec_example_canonical.snap`).
+///
+/// The same checkout note as [`SPEC_EXAMPLE`] applies; use
+/// [`spec_example_canonical`] for byte-level comparisons against CLI
+/// output.
 pub const SPEC_EXAMPLE_CANONICAL: &str = include_str!("../fixtures/spec_example_canonical.x");
+
+/// Normalizes checkout line endings to `\n`.
+///
+/// File content embedded with `include_str!` and the archived
+/// specification are read from the working tree, which Git may materialize
+/// with CRLF line endings on Windows; the committed blobs use LF. CLI
+/// output, by contrast, must use LF on every platform, which the suites
+/// assert explicitly before comparing normalized content.
+pub fn normalized(text: &str) -> String {
+    text.replace("\r\n", "\n")
+}
+
+/// The specification example with checkout line endings normalized to
+/// `\n`.
+pub fn spec_example() -> String {
+    normalized(SPEC_EXAMPLE)
+}
+
+/// The canonical fixture with checkout line endings normalized to `\n`.
+pub fn spec_example_canonical() -> String {
+    normalized(SPEC_EXAMPLE_CANONICAL)
+}
 
 /// Accepted Phase 1 inputs exercised end-to-end through the real binary:
 /// every representative category required for the CLI (Unicode

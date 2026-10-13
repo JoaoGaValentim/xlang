@@ -48,16 +48,18 @@ fn interp() { let s = \"value = {compute(1 + 2)}\"; let t = \"esc \\{brace\\}\";
 #[test]
 fn spec_example_end_to_end_conformance() {
     // The archived original specification must contain the example
-    // byte-for-byte; the example cannot be substituted or shortened.
-    let spec = common::archived_spec();
+    // byte-for-byte (modulo Git checkout line endings); the example cannot
+    // be substituted or shortened.
+    let spec = common::normalized(&common::archived_spec());
+    let example = common::spec_example();
     assert!(
-        spec.contains(common::SPEC_EXAMPLE),
+        spec.contains(&example),
         "docs/spec-v0.1-original.txt must contain examples/program.x byte-for-byte"
     );
 
     // The example is written to a real temporary `.x` file and loaded
     // through the CLI's actual file-reading path.
-    let (dir, output) = parse_bytes("spec-example.x", common::SPEC_EXAMPLE.as_bytes());
+    let (dir, output) = parse_bytes("spec-example.x", example.as_bytes());
     assert_status(&output, EXIT_SUCCESS);
     assert!(
         output.stderr.is_empty(),
@@ -67,9 +69,13 @@ fn spec_example_end_to_end_conformance() {
 
     // Deterministic canonical AST output, byte-identical to the accepted
     // canonical fixture (which equals the parser suite's canonical
-    // snapshot).
+    // snapshot); canonical output uses LF on every platform.
     let stdout = stdout_text(&output);
-    assert_eq!(stdout, common::SPEC_EXAMPLE_CANONICAL);
+    assert!(
+        !stdout.contains('\r'),
+        "canonical output must use LF line endings on every platform"
+    );
+    assert_eq!(stdout, common::spec_example_canonical());
 
     // Completeness: every top-level item of the original example appears.
     for marker in [
@@ -96,13 +102,11 @@ fn spec_example_end_to_end_conformance() {
     // Interoperability: re-parsing the printed output succeeds and yields
     // byte-identical canonical output (structural equivalence at the CLI
     // boundary).
-    let (_canon_dir, canonical) = parse_bytes(
-        "spec-canonical.x",
-        common::SPEC_EXAMPLE_CANONICAL.as_bytes(),
-    );
+    let canonical_text = common::spec_example_canonical();
+    let (_canon_dir, canonical) = parse_bytes("spec-canonical.x", canonical_text.as_bytes());
     assert_status(&canonical, EXIT_SUCCESS);
     assert!(canonical.stderr.is_empty());
-    assert_eq!(stdout_text(&canonical), common::SPEC_EXAMPLE_CANONICAL);
+    assert_eq!(stdout_text(&canonical), canonical_text);
 }
 
 #[test]
@@ -111,7 +115,12 @@ fn checked_in_example_file_parses_through_the_cli() {
     let output = run_xc(&root, &["parse", "examples/program.x"]);
     assert_status(&output, EXIT_SUCCESS);
     assert!(output.stderr.is_empty());
-    assert_eq!(stdout_text(&output), common::SPEC_EXAMPLE_CANONICAL);
+    let stdout = stdout_text(&output);
+    assert!(
+        !stdout.contains('\r'),
+        "canonical output must use LF line endings on every platform"
+    );
+    assert_eq!(stdout, common::spec_example_canonical());
 }
 
 #[test]
