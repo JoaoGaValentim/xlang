@@ -875,3 +875,55 @@ pub(crate) fn convert_int(value: xl_lexer::IntLit) -> xl_ast::IntLit {
         radix,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_associative_tiers_are_exactly_three() {
+        assert!(Tier::Assign.is_non_assoc());
+        assert!(Tier::Range.is_non_assoc());
+        assert!(Tier::Cmp.is_non_assoc());
+        for tier in [Tier::Or, Tier::And, Tier::Add, Tier::Mul] {
+            assert!(!tier.is_non_assoc(), "{tier:?}");
+        }
+    }
+
+    #[test]
+    fn binding_powers_match_the_ratified_table() {
+        let cases = [
+            (TokenKind::Eq, Tier::Assign, 2, 3),
+            (TokenKind::DotDot, Tier::Range, 4, 5),
+            (TokenKind::OrOr, Tier::Or, 6, 7),
+            (TokenKind::AndAnd, Tier::And, 8, 9),
+            (TokenKind::Lt, Tier::Cmp, 10, 11),
+            (TokenKind::Plus, Tier::Add, 12, 13),
+            (TokenKind::Star, Tier::Mul, 14, 15),
+        ];
+        for (kind, tier, lbp, rbp) in cases {
+            let info = peek_op(&kind).expect("operator");
+            assert_eq!(info.tier, tier, "{kind:?}");
+            assert_eq!(info.lbp, lbp, "{kind:?}");
+            assert_eq!(info.rbp, rbp, "{kind:?}");
+        }
+        assert!(peek_op(&TokenKind::LParen).is_none());
+        assert!(peek_op(&TokenKind::Ident(String::new())).is_none());
+    }
+
+    #[test]
+    fn integer_radix_converts_one_to_one() {
+        for (lexer_radix, ast_radix) in [
+            (xl_lexer::Radix::Dec, xl_ast::Radix::Dec),
+            (xl_lexer::Radix::Hex, xl_ast::Radix::Hex),
+            (xl_lexer::Radix::Bin, xl_ast::Radix::Bin),
+        ] {
+            let converted = convert_int(xl_lexer::IntLit {
+                magnitude: 42,
+                radix: lexer_radix,
+            });
+            assert_eq!(converted.magnitude, 42);
+            assert_eq!(converted.radix, ast_radix);
+        }
+    }
+}

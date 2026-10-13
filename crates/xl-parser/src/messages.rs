@@ -59,3 +59,40 @@ pub(crate) fn visibility_on_import() -> String {
 pub(crate) fn visibility_on_impl() -> String {
     "visibility is not allowed on impl blocks".to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expected_wraps_the_fragment() {
+        assert_eq!(expected("expression"), "expected expression");
+        assert_eq!(expected("';'"), "expected ';'");
+        assert_eq!(expected_or(",", ")"), "expected ',' or ')'");
+        assert_eq!(unexpected("'>'"), "unexpected '>'");
+    }
+
+    #[test]
+    fn contract_messages_are_exact() {
+        assert_eq!(
+            chained_comparison(),
+            "comparison operators cannot be chained; use parentheses"
+        );
+        assert_eq!(chained_range(), "range cannot be chained; use parentheses");
+        assert_eq!(
+            chained_assignment(),
+            "chained assignment; parenthesize the right-hand side"
+        );
+        assert_eq!(invalid_assignment_target(), "invalid assignment target");
+        assert_eq!(empty_interpolation(), "empty interpolation");
+        assert_eq!(nesting_limit(64), "expression nesting limit (64) exceeded");
+        assert_eq!(
+            visibility_on_import(),
+            "visibility is not allowed on import declarations"
+        );
+        assert_eq!(
+            visibility_on_impl(),
+            "visibility is not allowed on impl blocks"
+        );
+    }
+}
