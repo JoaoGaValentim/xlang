@@ -1,0 +1,19 @@
+---
+source: crates/xl-parser/tests/snapshots.rs
+expression: parsed.rendered()
+---
+error: comparison operators cannot be chained; use parentheses
+ --> test.x:2:19
+  |
+2 |     let a = x < y < z;
+  |                   ^
+error: range cannot be chained; use parentheses
+ --> test.x:3:17
+  |
+3 |     let b = p..q..r;
+  |                 ^^
+error: chained assignment; parenthesize the right-hand side
+ --> test.x:4:19
+  |
+4 |     let c = m = n = o;
+  |                   ^

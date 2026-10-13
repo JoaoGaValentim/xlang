@@ -481,7 +481,7 @@ impl Printer {
     // Statements and blocks
     // ----------------------------------------------------------------
 
-    fn stmt(&mut self, stmt: &Stmt, is_last: bool, tail_is_none: bool) -> Result<(), PrintError> {
+    fn stmt(&mut self, stmt: &Stmt, force_semi: bool) -> Result<(), PrintError> {
         self.enter(stmt.span)?;
         match &stmt.kind {
             StmtKind::Let(l) => {
@@ -501,10 +501,11 @@ impl Printer {
             StmtKind::Expr(expr) => {
                 self.expr(expr, 1)?;
                 if block_like(expr) {
-                    // A semicolon-free block-like statement in final position
-                    // with no tail would re-parse as a tail expression;
-                    // emit `;` to preserve the classification.
-                    if is_last && tail_is_none {
+                    // A semicolon-free block-like statement must be
+                    // terminated when it is in final position with no tail
+                    // (it would re-parse as a tail), or when the next
+                    // construct would attach as a postfix continuation.
+                    if force_semi {
                         self.out.push(';');
                     }
                 } else {
@@ -530,7 +531,16 @@ impl Printer {
         for (index, stmt) in block.stmts.iter().enumerate() {
             self.push_indent();
             let is_last = Some(index) == last_index;
-            self.stmt(stmt, is_last, block.tail.is_none())?;
+            // A semicolon-free block-like statement must be terminated when
+            // the next printed construct starts with `(` or `[`: those
+            // tokens would re-parse as a call/index postfix on the
+            // statement's expression (Directive 008 fuzz regression).
+            let next_continuation = match block.stmts.get(index + 1) {
+                Some(next) => stmt_starts_continuation(next),
+                None => block.tail.as_deref().is_some_and(starts_paren_or_bracket),
+            };
+            let terminator = (is_last && block.tail.is_none()) || next_continuation;
+            self.stmt(stmt, terminator)?;
             self.out.push('\n');
         }
         if let Some(tail) = &block.tail {
@@ -568,7 +578,24 @@ impl Printer {
             }
             ExprKind::Binary(op, left, right) => {
                 let (tier, left_assoc) = binary_tier(*op);
-                self.expr(left, if left_assoc { tier } else { tier + 1 })?;
+                let left_min = if left_assoc { tier } else { tier + 1 };
+                // Directive 008 §15 integration fix: a `<` comparison whose
+                // left operand would print with a trailing cast type must be
+                // parenthesized, because the re-parse of `… as T < rhs`
+                // reads `<` as a generic-argument opener inside the cast's
+                // type (`a * a as i64 < a` would not re-parse). The guard is
+                // only added where the level rules would not already
+                // parenthesize the operand.
+                let guard_cast_tail = matches!(op, BinOp::Lt)
+                    && expr_level(left) >= left_min
+                    && ends_with_cast_type(left);
+                if guard_cast_tail {
+                    self.out.push('(');
+                }
+                self.expr(left, left_min)?;
+                if guard_cast_tail {
+                    self.out.push(')');
+                }
                 self.out.push(' ');
                 self.out.push_str(binary_symbol(*op));
                 self.out.push(' ');
@@ -940,6 +967,53 @@ fn block_like(expr: &Expr) -> bool {
             | ExprKind::Loop(..)
             | ExprKind::Block(..)
     )
+}
+
+/// Returns `true` when a statement begins with a token that could attach to
+/// a preceding semicolon-free expression as a postfix continuation.
+fn stmt_starts_continuation(stmt: &Stmt) -> bool {
+    match &stmt.kind {
+        StmtKind::Expr(expr) => starts_paren_or_bracket(expr),
+        StmtKind::Let(_) | StmtKind::Item(_) => false,
+    }
+}
+
+/// Returns `true` when an expression's printed form starts with `(` or `[`.
+///
+/// Those tokens can re-parse as a call or index postfix on a preceding
+/// semicolon-free block-like statement, so the printer must terminate that
+/// statement with `;` (Directive 008 fuzz regression). The check follows
+/// the printed left edge; grouping is transparent in the AST, so the only
+/// `(`-starting leaves are tuple nodes.
+fn starts_paren_or_bracket(expr: &Expr) -> bool {
+    match &expr.kind {
+        ExprKind::Tuple(_) | ExprKind::Array(_) => true,
+        ExprKind::Binary(_, left, _)
+        | ExprKind::Range(left, _)
+        | ExprKind::Assign(_, left, _)
+        | ExprKind::Index(left, _) => starts_paren_or_bracket(left),
+        ExprKind::Call(callee, _) => starts_paren_or_bracket(callee),
+        ExprKind::Field(base, _) => starts_paren_or_bracket(base),
+        ExprKind::Cast(inner, _) | ExprKind::Try(inner) => starts_paren_or_bracket(inner),
+        _ => false,
+    }
+}
+
+/// Returns `true` when the printed form of `expr` ends with a cast type
+/// (`… as T`).
+///
+/// Such a tail immediately before a `<` comparison would be re-parsed as a
+/// generic-argument opener inside the cast's type, so the printer
+/// parenthesizes the comparison's left operand (Directive 008 §15). The
+/// recursion follows the printed right edge for unparenthesized binary and
+/// range forms.
+fn ends_with_cast_type(expr: &Expr) -> bool {
+    match &expr.kind {
+        ExprKind::Cast(..) => true,
+        ExprKind::Unary(_, operand) => ends_with_cast_type(operand),
+        ExprKind::Binary(_, _, right) | ExprKind::Range(_, right) => ends_with_cast_type(right),
+        _ => false,
+    }
 }
 
 /// Precedence level of an expression per the accepted Pratt table.

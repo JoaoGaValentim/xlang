@@ -1,0 +1,24 @@
+---
+source: crates/xl-parser/tests/snapshots.rs
+expression: rendered
+---
+error: expected parameter
+ --> test.x:1:12
+  |
+1 | fn broken( { }
+  |            ^
+error: expected expression
+ --> test.x:3:13
+  |
+3 |     let x = ;
+  |             ^
+error: comparison operators cannot be chained; use parentheses
+ --> test.x:4:19
+  |
+4 |     let y = a < b < c;
+  |                   ^
+error: unexpected '>'
+ --> test.x:5:18
+  |
+5 |     let z: Vec<T>> = v;
+  |                  ^
