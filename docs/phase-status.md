@@ -46,6 +46,16 @@ criteria have been verified and the project owner has approved advancement
   descent + Pratt expressions, ratified recovery sets, shared
   `MAX_PARSE_DEPTH = 64`, G-3 generic closing, interpolation integration)
   is implemented and pending owner review. `xc parse` is **NOT STARTED**.
+- **Phase 1 — LEXER/PARSER FUZZING ACCEPTED** (Directive 008): the
+  combined `lex_parse` fuzz target completed the specification's one-hour
+  criterion on `017962b` — 9,111,364 runs in 3601 s, zero crashes. The
+  fuzzing found two real defects across earlier attempts (match-arm
+  diagnostic cascade; printer non-idempotence after block-like statements)
+  and one round-trip printer defect was found by property testing (cast
+  tails before `<`); all three are fixed with regression tests
+  (`1e427f6`, `94b11c7`, `017962b`). The remaining Phase 1 acceptance
+  criterion (all specification examples parse) is satisfied for the
+  parser/AST; the milestone `xc parse` still requires the CLI stage.
 
 ## Phase 0 closure record (final — Directives 002–004, 2026-10-12)
 
@@ -94,8 +104,9 @@ criteria have been verified and the project owner has approved advancement
 | ADR for the ratified syntax contract | ACCEPTED | `docs/decisions/adr-0004-phase-1-syntax-contract.md` |
 | `xl-lexer` implementation | IMPLEMENTED — INTEGRATED (Directive 006) | `crates/xl-lexer`; merged via PR #3 (merge `9ed50ad`); 104 lexer tests (148 workspace-wide at merge, 0 failed); CI runs 38328242463 (`d2972b8`) and 38328884949 (`d48a622`) green on all four jobs |
 | `xl-ast` implementation | IMPLEMENTED — INTEGRATED (Directive 007) | `crates/xl-ast`; data model + canonical printer + structural validator; 94 AST tests (242 workspace-wide, 0 failed; CI-observed 242); 3 insta snapshots; merged via PR #4 (merge `df9e859`; integration CI run 38407939639, all four jobs green) |
-| `xl-parser` implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 008) | `crates/xl-parser`; recursive descent + Pratt expressions, ratified recovery sets, shared `MAX_PARSE_DEPTH = 64`, G-3 generic closing, interpolation integration; 132 parser tests (374 workspace-wide, 0 failed locally); 4 insta snapshots; spec example parses clean and round-trips; PR #5 pending owner review |
-| `xl-lexer` fuzz harness (preliminary evidence) | PASS — preliminary only | `fuzz/`; 1,848,945 runs in 61 s on the local nightly toolchain, zero crashes and zero artifacts. NOT the Phase 1 acceptance criterion: the specification's lexer/parser fuzzing gate cannot pass without the parser |
+| `xl-parser` implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 008) | `crates/xl-parser`; recursive descent + Pratt expressions, ratified recovery sets, shared `MAX_PARSE_DEPTH = 64`, G-3 generic closing, interpolation integration; 187 parser tests (435 workspace-wide, 0 failed locally; CI-observed 435); 4 insta snapshots; spec example parses clean and round-trips; PR #5 pending owner review; CI run [38446643696](https://github.com/JoaoGaValentim/xlang/actions/runs/38446643696) on `017962b` green on all four jobs |
+| `xl-lexer` fuzz harness (preliminary evidence) | PASS — preliminary only | `fuzz/fuzz_targets/lex_tokens.rs`; 1,848,945 runs in 61 s on the local nightly toolchain, zero crashes and zero artifacts. Superseded by the combined lexer/parser fuzzing row below for acceptance purposes |
+| Combined lexer/parser fuzzing (Phase 1 acceptance criterion: 1 hour without failures) | **PASS** | `fuzz/fuzz_targets/lex_parse.rs` on revision `017962b`: **9,111,364 runs in 3601 s** (average 2,530 exec/s, peak RSS 770 MB, 22,355 corpus units added), zero crashes, zero sanitizer failures, no new artifacts. The two earlier attempts found and fixed real defects before this run: a match-arm diagnostic cascade (`crash-67a0b82e…`) and printer non-idempotence (`crash-206b3a0c…`), both with regression tests |
 | `xl-parser`, `xc parse` | `xl-parser` IMPLEMENTED — PENDING OWNER REVIEW; `xc parse` NOT STARTED | Directive 008 (parser authorized); CLI remains unauthorized (Directives 004–007) |
 | Phase 1 docs CI (proposal set) | PASS | PR #2 merged as `db2437b`; run 38323917744 all four jobs green |
 
@@ -120,6 +131,10 @@ criteria have been verified and the project owner has approved advancement
   parser-assigned identifiers excluded per the ratified equivalence
   relation.
 - The `xl-lexer` fuzz run is preliminary evidence only; no fabricated or
-  extrapolated fuzzing results are recorded. A combined lexer/parser fuzz
-  target exists (`fuzz/fuzz_targets/lex_parse.rs`); its executed evidence
-  is recorded separately when complete.
+  extrapolated fuzzing results are recorded. The combined lexer/parser
+  criterion was executed with real evidence (see the acceptance row
+  above): 9,111,364 runs in 3601 s on `017962b`, zero crashes.
+- The two fuzz-found defects and the property-test-found printer defect
+  have documented reproductions: `fuzz/artifacts/lex_parse/`
+  (`crash-67a0b82e…`, `crash-206b3a0c…`; gitignored) and the round-trip
+  property counterexample `((a * a as i64) < a)`.
