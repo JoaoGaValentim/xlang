@@ -531,3 +531,75 @@ fn cast_tail_left_of_greater_than_needs_no_guard() {
     );
     assert_eq!(print_expr(&expr).expect("prints"), "a * a as i64 > c");
 }
+
+#[test]
+fn block_like_statement_before_parenthesized_tail_is_terminated() {
+    // Directive 008 fuzz regression: `for … {}` immediately followed by a
+    // tuple tail would re-parse as a call on the `for` expression; the
+    // printer must emit `;` to preserve the statement classification.
+    let for_expr = ex_cover(
+        &[fspan(0, 1), fspan(1, 2)],
+        ExprKind::For(
+            Box::new(Pat {
+                kind: PatKind::Binding(ident("i", 0)),
+                span: fspan(0, 1),
+            }),
+            Box::new(var("xs")),
+            empty_block(),
+        ),
+    );
+    let tail = tuple(vec![var("a"), var("b")]);
+    let block = block_with(vec![expr_stmt(for_expr)], Some(tail));
+    let printed = print_block(&block).expect("prints");
+    assert!(
+        printed.contains("};"),
+        "the for statement must be terminated: {printed}"
+    );
+    assert!(
+        printed.contains("\n    (a, b)\n"),
+        "the tuple tail stays on its own line: {printed}"
+    );
+}
+
+#[test]
+fn block_like_statement_before_bracket_statement_is_terminated() {
+    let for_expr = ex_cover(
+        &[fspan(0, 1), fspan(1, 2)],
+        ExprKind::For(
+            Box::new(Pat {
+                kind: PatKind::Binding(ident("i", 0)),
+                span: fspan(0, 1),
+            }),
+            Box::new(var("xs")),
+            empty_block(),
+        ),
+    );
+    let array_stmt = expr_stmt(array(vec![lit_int(1)]));
+    let block = block_with(vec![expr_stmt(for_expr), array_stmt], None);
+    let printed = print_block(&block).expect("prints");
+    assert!(
+        printed.contains("};"),
+        "the for statement must be terminated before `[`: {printed}"
+    );
+}
+
+#[test]
+fn block_like_statement_before_keyword_statement_needs_no_semicolon() {
+    let for_expr = ex_cover(
+        &[fspan(0, 1), fspan(1, 2)],
+        ExprKind::For(
+            Box::new(Pat {
+                kind: PatKind::Binding(ident("i", 0)),
+                span: fspan(0, 1),
+            }),
+            Box::new(var("xs")),
+            empty_block(),
+        ),
+    );
+    let block = block_with(vec![expr_stmt(for_expr), expr_stmt(var("next"))], None);
+    let printed = print_block(&block).expect("prints");
+    assert!(
+        !printed.contains("};"),
+        "no terminator is needed before an identifier: {printed}"
+    );
+}

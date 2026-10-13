@@ -18,6 +18,19 @@ const CORPUS: &[&str] = &[
     "fn f() { let x = (a + b) * (c - d); }",
     "fn f() { let x = ((a)); }",
     "fn f() { let x = -a + !b; }",
+    // Cast tails immediately before `<` (printer integration fix,
+    // Directive 008 §15): `as` types must not absorb the comparison.
+    "fn f() { let x = (a * a as i64) < a; }",
+    "fn f() { let x = (a as i64) < b; }",
+    "fn f() { let x = (a + b as i64) < c; }",
+    "fn f() { let x = (-a as i64) < b; }",
+    // Block-like statements immediately before `(`/`[` continuations
+    // (printer termination fix, Directive 008 fuzz regression).
+    "fn area(s: Shape) -> f64 { 0.0; for i in 0..10 { total += i as f64 }; (f64, f64) }",
+    "fn f() { while a {}; [1, 2] }",
+    "fn f() { if a { } (x, y); }",
+    "fn f() { { g(); }; (1, 2) }",
+    "fn f() { loop { break }; [first, second] }",
     // Grouped non-associative operations.
     "fn f() { let x = (a < b) < c; }",
     "fn f() { let x = (a..b)..c; }",
