@@ -479,6 +479,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "xl-cli"
+version = "0.1.0"
+dependencies = [
+ "xl-ast",
+ "xl-diag",
+ "xl-parser",
+ "xl-span",
+]
+
+[[package]]
 name = "xl-diag"
 version = "0.1.0"
 dependencies = [
