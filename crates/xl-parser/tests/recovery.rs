@@ -89,6 +89,33 @@ fn match_arm_missing_body_reports_expression() {
 }
 
 #[test]
+fn stray_tokens_in_match_arms_report_once_per_arm() {
+    // A token that cannot begin a pattern is reported once per arm; the
+    // recovery does not cascade arrow/body diagnostics for the same token
+    // (regression for the fuzz-found comma runs).
+    let parsed = parse_source("fn f() { match s { ,, } }");
+    assert_eq!(
+        parsed.messages(),
+        vec!["expected pattern", "expected pattern"]
+    );
+    let body = fn_body(&parsed.output.items, "f");
+    let tail = body.tail.as_ref().expect("tail");
+    let ExprKind::Match(_, arms) = &tail.kind else {
+        panic!("match");
+    };
+    assert!(arms.is_empty());
+}
+
+#[test]
+fn stray_arm_token_with_arrow_still_recovers_the_body() {
+    // `A ,` — the pattern parsed, the arrow is missing, and the body
+    // placeholder keeps the arm; only the arrow is reported.
+    let parsed = parse_source("fn f() { match s { A , B => 1 } }");
+    let messages = parsed.messages();
+    assert_eq!(messages, vec!["expected '=>'", "expected expression"]);
+}
+
+#[test]
 fn illegal_lexical_token_is_preserved_and_skipped() {
     let parsed = parse_source("fn f() { let x = &y; }");
     // The lexer owns the character diagnostic; the parser skips the Error

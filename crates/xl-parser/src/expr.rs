@@ -677,6 +677,21 @@ impl Parser {
                 break;
             }
             let before = self.stream.mark();
+            if !self.at_pattern_start() {
+                // The token cannot begin a pattern: report the arm once and
+                // skip to the next arm boundary instead of cascading
+                // arrow/body diagnostics for the same token.
+                let span = self.stream.current_span();
+                let message = messages::expected("pattern");
+                self.error(message, span);
+                self.synchronize(MATCH_SYNC);
+                if self.stream.check_tag(Tag::Comma) {
+                    self.stream.bump();
+                    continue;
+                }
+                self.ensure_progress_public(before);
+                break;
+            }
             let pat = self.parse_pattern();
             let _ = self.expect_tag(Tag::FatArrow, "'=>'");
             let body = self.parse_expr_bp(0);
@@ -764,6 +779,27 @@ impl Parser {
                 lo,
                 hi: hi.max(lo),
             },
+        }
+    }
+
+    /// Returns `true` when the current token can begin a pattern (used by
+    /// match-arm recovery to report a stray token once instead of
+    /// cascading).
+    fn at_pattern_start(&self) -> bool {
+        match self.stream.peek() {
+            None => false,
+            Some(token) => matches!(
+                token.kind,
+                TokenKind::Ident(_)
+                    | TokenKind::Underscore
+                    | TokenKind::Int(_)
+                    | TokenKind::Float(_)
+                    | TokenKind::Char(_)
+                    | TokenKind::Str(_)
+                    | TokenKind::True
+                    | TokenKind::False
+                    | TokenKind::LParen
+            ),
         }
     }
 

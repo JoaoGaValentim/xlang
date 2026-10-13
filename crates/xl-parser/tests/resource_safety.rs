@@ -280,6 +280,26 @@ fn deeply_nested_for_expressions_are_bounded() {
 }
 
 #[test]
+fn stray_commas_in_match_arms_recover_linearly() {
+    // Regression for the fuzz-found cascade (`crash-67a0b82e…`, fixed in
+    // the arm-recovery pre-check): each stray comma yields exactly one
+    // `expected pattern` diagnostic and is consumed, so diagnostics stay
+    // linear in the input instead of tripling per token.
+    let commas = 16;
+    let source = format!("fn f() {{ match s {{ {} }} }}", ",".repeat(commas));
+    let parsed = parse_source(&source);
+    assert_eq!(
+        parsed
+            .messages()
+            .iter()
+            .filter(|message| *message == "expected pattern")
+            .count(),
+        commas
+    );
+    assert_eq!(parsed.output.items.len(), 1);
+}
+
+#[test]
 fn parse_after_recovery_continues_for_later_items() {
     let source = format!(
         "fn broken( {} ) {{}} fn fine() -> i64 {{ 1 }}",
