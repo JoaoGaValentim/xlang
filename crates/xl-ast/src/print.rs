@@ -568,7 +568,24 @@ impl Printer {
             }
             ExprKind::Binary(op, left, right) => {
                 let (tier, left_assoc) = binary_tier(*op);
-                self.expr(left, if left_assoc { tier } else { tier + 1 })?;
+                let left_min = if left_assoc { tier } else { tier + 1 };
+                // Directive 008 §15 integration fix: a `<` comparison whose
+                // left operand would print with a trailing cast type must be
+                // parenthesized, because the re-parse of `… as T < rhs`
+                // reads `<` as a generic-argument opener inside the cast's
+                // type (`a * a as i64 < a` would not re-parse). The guard is
+                // only added where the level rules would not already
+                // parenthesize the operand.
+                let guard_cast_tail = matches!(op, BinOp::Lt)
+                    && expr_level(left) >= left_min
+                    && ends_with_cast_type(left);
+                if guard_cast_tail {
+                    self.out.push('(');
+                }
+                self.expr(left, left_min)?;
+                if guard_cast_tail {
+                    self.out.push(')');
+                }
                 self.out.push(' ');
                 self.out.push_str(binary_symbol(*op));
                 self.out.push(' ');
@@ -940,6 +957,23 @@ fn block_like(expr: &Expr) -> bool {
             | ExprKind::Loop(..)
             | ExprKind::Block(..)
     )
+}
+
+/// Returns `true` when the printed form of `expr` ends with a cast type
+/// (`… as T`).
+///
+/// Such a tail immediately before a `<` comparison would be re-parsed as a
+/// generic-argument opener inside the cast's type, so the printer
+/// parenthesizes the comparison's left operand (Directive 008 §15). The
+/// recursion follows the printed right edge for unparenthesized binary and
+/// range forms.
+fn ends_with_cast_type(expr: &Expr) -> bool {
+    match &expr.kind {
+        ExprKind::Cast(..) => true,
+        ExprKind::Unary(_, operand) => ends_with_cast_type(operand),
+        ExprKind::Binary(_, _, right) | ExprKind::Range(_, right) => ends_with_cast_type(right),
+        _ => false,
+    }
 }
 
 /// Precedence level of an expression per the accepted Pratt table.

@@ -500,3 +500,34 @@ fn empty_container_items_print_compactly() {
     }));
     assert_eq!(print_item(&item).expect("prints"), "struct S {}");
 }
+
+#[test]
+fn cast_tail_left_of_less_than_is_parenthesized() {
+    // Directive 008 §15 integration fix: `a * a as i64 < a` would re-parse
+    // the `<` as a generic-argument opener inside the cast's type; the
+    // printer must keep the comparison tree re-parseable.
+    let expr = bin(
+        BinOp::Lt,
+        bin(BinOp::Mul, var("a"), cast(var("a"), ty_path("i64"))),
+        var("c"),
+    );
+    assert_eq!(print_expr(&expr).expect("prints"), "(a * a as i64) < c");
+}
+
+#[test]
+fn bare_cast_left_of_less_than_keeps_a_single_parenthesis_pair() {
+    let expr = bin(BinOp::Lt, cast(var("a"), ty_path("i64")), var("b"));
+    assert_eq!(print_expr(&expr).expect("prints"), "(a as i64) < b");
+}
+
+#[test]
+fn cast_tail_left_of_greater_than_needs_no_guard() {
+    // `>` never opens generic arguments, so the accepted parentheses rule
+    // stays: the cast binds tighter than the comparison.
+    let expr = bin(
+        BinOp::Gt,
+        bin(BinOp::Mul, var("a"), cast(var("a"), ty_path("i64"))),
+        var("c"),
+    );
+    assert_eq!(print_expr(&expr).expect("prints"), "a * a as i64 > c");
+}
