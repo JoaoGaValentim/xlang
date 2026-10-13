@@ -83,7 +83,7 @@ criteria have been verified and the project owner has approved advancement
 | PD-002 through PD-006 | RESOLVED (Directive 006) | `docs/pending-decisions.md` |
 | ADR for the ratified syntax contract | ACCEPTED | `docs/decisions/adr-0004-phase-1-syntax-contract.md` |
 | `xl-lexer` implementation | IMPLEMENTED — INTEGRATED (Directive 006) | `crates/xl-lexer`; merged via PR #3 (merge `9ed50ad`); 104 lexer tests (148 workspace-wide at merge, 0 failed); CI runs 38328242463 (`d2972b8`) and 38328884949 (`d48a622`) green on all four jobs |
-| `xl-ast` implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 007) | `crates/xl-ast`; data model + canonical printer + structural validator; 94 AST tests (242 workspace-wide, 0 failed); 3 insta snapshots; CI run on PR #4 |
+| `xl-ast` implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 007) | `crates/xl-ast`; data model + canonical printer + structural validator; 94 AST tests (242 workspace-wide, 0 failed; CI-observed 242); 3 insta snapshots; CI run 38337088059 (`702f140`) green on all four jobs |
 | `xl-lexer` fuzz harness (preliminary evidence) | PASS — preliminary only | `fuzz/`; 1,848,945 runs in 61 s on the local nightly toolchain, zero crashes and zero artifacts. NOT the Phase 1 acceptance criterion: the specification's lexer/parser fuzzing gate cannot pass without the parser |
 | `xl-parser`, `xc parse` | NOT AUTHORIZED / NOT STARTED | Directives 004 §3, 005, 006, 007 |
 | Phase 1 docs CI (proposal set) | PASS | PR #2 merged as `db2437b`; run 38323917744 all four jobs green |
