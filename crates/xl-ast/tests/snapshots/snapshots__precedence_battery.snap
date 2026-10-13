@@ -1,0 +1,16 @@
+---
+source: crates/xl-ast/tests/snapshots.rs
+expression: "printed.join(\"\\n\")"
+---
+a + b * c
+(a + b) * c
+a - (b - c)
+a || b && c
+(a < b) < c
+(a..b)..c
+a = (b = c)
+-(x * y)
+(a + b) as f64
+s.to_int()?
+return a + b
+(return x) + 1
