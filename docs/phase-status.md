@@ -58,9 +58,11 @@ criteria have been verified and the project owner has approved advancement
   End-to-end tests invoke the real binary with real `.x` files and cover
   the archived specification example, the accepted feature corpus,
   determinism, round-trip printing, robustness, and every documented
-  usage/file error. Pending owner review. Directive 009 did not modify
-  `xl-lexer`, `xl-ast`, or `xl-parser` code, so the recorded combined
-  lexer/parser fuzz evidence remains valid.
+  usage/file error. Pending owner review. CI run
+  [38484468487](https://github.com/JoaoGaValentim/xlang/actions/runs/38484468487)
+  on `63d2af3` is green on all four jobs (Format, ubuntu, windows, macos).
+  Directive 009 did not modify `xl-lexer`, `xl-ast`, or `xl-parser` code,
+  so the recorded combined lexer/parser fuzz evidence remains valid.
 - **Phase 1 — LEXER/PARSER FUZZING ACCEPTED** (Directive 008): the
   combined `lex_parse` fuzz target completed the specification's one-hour
   criterion on `017962b` — 9,111,364 runs in 3601 s, zero crashes. The
@@ -120,7 +122,7 @@ criteria have been verified and the project owner has approved advancement
 | `xl-lexer` implementation | IMPLEMENTED — INTEGRATED (Directive 006) | `crates/xl-lexer`; merged via PR #3 (merge `9ed50ad`); 104 lexer tests (148 workspace-wide at merge, 0 failed); CI runs 38328242463 (`d2972b8`) and 38328884949 (`d48a622`) green on all four jobs |
 | `xl-ast` implementation | IMPLEMENTED — INTEGRATED (Directive 007) | `crates/xl-ast`; data model + canonical printer + structural validator; 94 AST tests (242 workspace-wide, 0 failed; CI-observed 242); 3 insta snapshots; merged via PR #4 (merge `df9e859`; integration CI run 38407939639, all four jobs green) |
 | `xl-parser` implementation | IMPLEMENTED — INTEGRATED (Directive 008) | `crates/xl-parser`; recursive descent + Pratt expressions, ratified recovery sets, shared `MAX_PARSE_DEPTH = 64`, G-3 generic closing, interpolation integration; 187 parser tests; 4 insta snapshots; spec example parses clean and round-trips; merged via PR #5 (merge `b4a7416`; integration CI run [38469504073](https://github.com/JoaoGaValentim/xlang/actions/runs/38469504073) on the merge commit, all four jobs green) |
-| `xl-cli` (`xc parse`) implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 009) | `crates/xl-cli`; binary `xc`; hand-written argument parsing (no CLI dependency); file loading with recoverable I/O and UTF-8 decoding; `SourceMap` registration; accepted `xl-parser` API; diagnostics via `xl-diag` on stderr; canonical AST via `xl-ast::print_items` on stdout; exit codes `0`/`1`/`2` documented as CLI policy; 48 crate tests (15 unit + 33 end-to-end invoking the real binary); 483 workspace-wide tests, 0 failed locally; conformance fixture for the specification example byte-identical to the parser canonical snapshot |
+| `xl-cli` (`xc parse`) implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 009) | `crates/xl-cli`; binary `xc`; hand-written argument parsing (no CLI dependency); file loading with recoverable I/O and UTF-8 decoding; `SourceMap` registration; accepted `xl-parser` API; diagnostics via `xl-diag` on stderr; canonical AST via `xl-ast::print_items` on stdout; exit codes `0`/`1`/`2` documented as CLI policy; 48 crate tests (15 unit + 33 end-to-end invoking the real binary); 483 workspace-wide tests, 0 failed locally; conformance fixture for the specification example byte-identical to the parser canonical snapshot; CI run [38484468487](https://github.com/JoaoGaValentim/xlang/actions/runs/38484468487) on `63d2af3` green on all four jobs (Format, ubuntu, windows, macos) |
 | `xl-lexer` fuzz harness (preliminary evidence) | PASS — preliminary only | `fuzz/fuzz_targets/lex_tokens.rs`; 1,848,945 runs in 61 s on the local nightly toolchain, zero crashes and zero artifacts. Superseded by the combined lexer/parser fuzzing row below for acceptance purposes |
 | Combined lexer/parser fuzzing (Phase 1 acceptance criterion: 1 hour without failures) | **PASS** | `fuzz/fuzz_targets/lex_parse.rs` on revision `017962b`: **9,111,364 runs in 3601 s** (average 2,530 exec/s, peak RSS 770 MB, 22,355 corpus units added), zero crashes, zero sanitizer failures, no new artifacts. The two earlier attempts found and fixed real defects before this run: a match-arm diagnostic cascade (`crash-67a0b82e…`) and printer non-idempotence (`crash-206b3a0c…`), both with regression tests |
 | `xl-parser`, `xc parse` | `xl-parser` INTEGRATED (PR #5); `xc parse` IMPLEMENTED — PENDING OWNER REVIEW (Directive 009) | Directive 008 (parser authorized); Directive 009 (CLI authorized) |
@@ -143,7 +145,7 @@ Classification vocabulary: **PASS**, **FAIL**, **NOT VERIFIED**,
 | 8 | Parser/AST round-trip equivalence tests pass | PASS | `crates/xl-parser/tests/roundtrip.rs`, `properties.rs`; CLI corpus round-trip |
 | 9 | One-hour lexer/parser fuzz evidence is valid | PASS | `lex_parse` on `017962b`: 9,111,364 runs / 3601 s, zero crashes; lexer/parser code unchanged by Directive 009 |
 | 10 | The real `xc parse` command works | PASS | end-to-end tests invoke the built binary; 666-byte canonical output for the example; exit codes `0`/`1`/`2` verified |
-| 11 | CI is green on the final CLI revision | PENDING — recorded in the Directive 009 report | CI run for the `phase/1-cli` revision |
+| 11 | CI is green on the final CLI revision | PASS | run [38484468487](https://github.com/JoaoGaValentim/xlang/actions/runs/38484468487) on `63d2af3`: Format and Check (ubuntu-latest, macos-latest, windows-latest) all green; CI-observed counts 483/483/481 tests (Windows omits the two documented `#[cfg(unix)]` reproducibility tests) |
 | 12 | Original specification archive is unchanged | PASS | SHA-256 `c3c6bce5…` re-verified during the Directive 009 merge gate |
 | 13 | No out-of-scope compiler functionality exists | PASS | `crates/` contains exactly `xl-span`, `xl-diag`, `xl-lexer`, `xl-ast`, `xl-parser`, `xl-cli` |
 | 14 | All known limitations are documented | PASS | `docs/architecture.md` §3 (`xl-cli`; exit codes, empty-file policy, rendering limits); README status and limitations |
