@@ -17,8 +17,9 @@ as a subsequent backend.
 Phase 0 implements the source-location and diagnostics foundation;
 Phase 1 implements the lexical frontend (`xl-lexer`, integrated via PR #3),
 the syntax tree with canonical printing and structural validation
-(`xl-ast`, integrated via PR #4), and the syntactic parser
-(`xl-parser`, Directive 008, pending owner review). **No CLI, HIR, type
+(`xl-ast`, integrated via PR #4), the syntactic parser (`xl-parser`,
+integrated via PR #5), and the command-line interface (`xl-cli`,
+Directive 009, pending owner review). **No HIR, name resolution, type
 checking, MIR, bytecode, VM, native code generation, standard library,
 formatter, LSP, or package management code exists in this repository.**
 
@@ -41,7 +42,12 @@ formatter, LSP, or package management code exists in this repository.**
 ┌────────────▼─────────────┐
 │ xl-parser                │  tokens → xl-ast items + diagnostics;
 │ (syntactic frontend)     │  Pratt expressions, recovery, depth limits
-└──────────────────────────┘   (future xl-cli depends on this)
+└────────────┬─────────────┘
+             │ depends on
+┌────────────▼─────────────┐
+│ xl-cli                   │  `xc` binary: `xc parse <file.x>` renders
+│ (command-line interface) │  diagnostics (stderr) and canonical AST
+└──────────────────────────┘   (stdout); exit codes 0/1/2
 
 ┌──────────────────────────┐
 │ xl-ast                   │  Item/Stmt/Expr/Pat/Type model, canonical
@@ -50,9 +56,9 @@ formatter, LSP, or package management code exists in this repository.**
 ```
 
 Dependency direction: `xl-lexer → {xl-span, xl-diag}`,
-`xl-ast → xl-span`, and `xl-parser → {xl-lexer, xl-ast, xl-span, xl-diag}`;
-the future `xl-cli` will depend on the parser. Foundation crates must
-never depend on later-phase crates. All crates build with
+`xl-ast → xl-span`, `xl-parser → {xl-lexer, xl-ast, xl-span, xl-diag}`,
+and `xl-cli → {xl-parser, xl-ast, xl-span, xl-diag}`. Foundation crates
+must never depend on later-phase crates. All crates build with
 `#![forbid(unsafe_code)]` and hold no global mutable state; every piece of
 compiler state is owned by the caller and passed explicitly.
 
@@ -157,6 +163,59 @@ and column conventions.
 - Dependencies: `xl-lexer`, `xl-ast`, `xl-span`, `xl-diag`. No CLI or
   later-stage dependency; no name resolution, typing, or desugaring.
 
+### `xl-cli`
+
+- Binary `xc` (package `xl-cli`); Phase 1 authorizes exactly one command:
+  `xc parse <file.x>`, plus `xc --help`/`-h` and `xc --version`/`-V`.
+  There is no argument-parsing dependency; the surface is parsed by a
+  small hand-written, I/O-free, panic-free function. No other subcommands,
+  flags, or output formats exist.
+- `xc parse` reads the file with recoverable I/O (`std::fs::read`, no
+  panics and no `unsafe`), decodes it as UTF-8, registers it in an
+  `xl-span::SourceMap`, parses it through the accepted
+  `xl_parser::parse_file` API, renders every diagnostic with
+  `xl_diag::render` on stderr (file location, line, column, highlighted
+  span, labels), and prints `xl_ast::print_items` output — the accepted
+  canonical printer, never a CLI-specific printer — plus one trailing
+  newline on stdout. A module with zero items — a byte-empty file, a
+  whitespace-only file, or a trivia-only file — is valid under the
+  accepted grammar (`module = { item }`) and prints nothing.
+- The command is syntax-only: it never resolves names, checks types,
+  compiles, or executes the program. Undefined names are not Phase 1
+  errors. The canonical output is normalized XLANG syntax for the parsed
+  tree, not compiled code or runtime output.
+- **Exit-code policy (CLI contract, not language semantics):**
+  `0` = parse produced no error-level diagnostics (warnings and notes alone
+  do not fail); `1` = lexical or syntactic errors — diagnostics on stderr
+  and nothing on stdout, so a recovered tree is never presented as valid
+  source; `2` = usage errors (missing/unknown command, missing or
+  excessive arguments, unknown flags), file handling errors (unreadable,
+  missing, invalid UTF-8, source beyond the `u32`
+  span-addressing limit, which is rejected from file metadata before it is
+  read), or unexpected internal failures (defensive paths; not reachable
+  for parser-produced trees).
+- **CLI policy notes:** a source file is one module; a byte-empty file,
+  like a whitespace-only or trivia-only file, is the valid empty module and
+  succeeds with exit `0`, no diagnostics, and no output (Directive 009-R1
+  conformance fix).
+  Any positional argument after `parse` that begins with `-` is treated as
+  a flag and rejected (`--help` is accepted only at the top level; use
+  `./-name.x` to parse a file whose name begins with `-`). File names are
+  not required to end in `.x`. I/O error messages embed the operating
+  system's error text and are therefore platform-specific; all other
+  messages are stable byte-for-byte.
+- **Known diagnostic-rendering limitations** (inherited from Phase 0
+  `xl-diag` and tracked in `docs/pending-decisions.md`): rendering is
+  plain text with no colors and no stable error codes; no terminal-width
+  wrapping (long source lines are printed in full); multi-line spans
+  highlight only the first line; columns count Unicode scalar values, so
+  alignment assumes one display column per scalar value (wide characters
+  and tabs can misalign the caret).
+- Dependencies: `xl-parser`, `xl-ast`, `xl-span`, `xl-diag`. It uses
+  `xl-lexer` only indirectly through the parser. No network access, no
+  source execution, and no filesystem access beyond reading the requested
+  file.
+
 ## 4. Design principles
 
 - **Determinism.** Identical inputs produce identical results; rendering is
@@ -174,7 +233,8 @@ and column conventions.
 
 ## 5. Testing strategy
 
-- Unit tests for internal invariants (line index construction).
+- Unit tests for internal invariants (line index construction, argument
+  parsing, severity-to-exit-status policy).
 - Integration tests against the public API per crate
   (`crates/*/tests/`).
 - One workspace-level cross-crate integration test in `tests/`, wired as an
@@ -182,8 +242,23 @@ and column conventions.
   `cargo test --workspace`. It renders a complete sample diagnostic
   (file location, source line, highlighted span, labels, message) and is
   the reference artifact requested for Phase 0.
-- Property-based testing is deferred: the current invariants are covered by
-  targeted edge-case tests, and Phase 0 keeps dependencies minimal.
+- Lexer, parser, and AST suites include exact-output assertions, `insta`
+  snapshots, property tests (`proptest`), span/identifier invariants, and
+  the `parse(print(ast)) ≡ ast` round-trip relation; the combined
+  lexer/parser fuzz target lives in `fuzz/`.
+- `xl-cli` ships end-to-end tests (`crates/xl-cli/tests/`) that invoke the
+  real `xc` binary built by Cargo (`CARGO_BIN_EXE_xc`) — never an in-process
+  shortcut — with real `.x` files in per-test temporary directories. They
+  assert exit status, stdout, and stderr exactly, cover help/version and
+  every documented usage error, assert that the archived specification
+  example parses end-to-end and round-trips (its canonical output is pinned
+  byte-for-byte as a fixture, identical to the parser suite snapshot), and
+  exercise determinism across repeated runs, robustness (empty, invalid
+  UTF-8, unreadable, missing, directory, deeply nested, and large inputs),
+  and the accepted feature corpus. No new test dependency was introduced;
+  temporary directories and process spawning use the standard library.
+- Property-based testing may be added only when justified and minimal; it
+  must not expand dependencies without review.
 
 ## 6. Continuous integration
 

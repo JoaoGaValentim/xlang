@@ -3,9 +3,8 @@
 ```text
 CURRENT_PHASE: 1
 PHASE_NAME:    Lexical and Syntactic Frontend
-STATUS:        IN PROGRESS — contracts ratified; lexer and AST integrated;
-               PARSER IMPLEMENTED (PENDING OWNER REVIEW);
-               CLI NOT STARTED
+STATUS:        IN PROGRESS — contracts ratified; lexer, AST, and parser
+               integrated; CLI IMPLEMENTED (PENDING OWNER REVIEW)
 ```
 
 A phase may transition to `APPROVED` only after all required acceptance
@@ -46,6 +45,39 @@ criteria have been verified and the project owner has approved advancement
   descent + Pratt expressions, ratified recovery sets, shared
   `MAX_PARSE_DEPTH = 64`, G-3 generic closing, interpolation integration)
   is implemented and pending owner review. `xc parse` is **NOT STARTED**.
+- **Phase 1 — PARSER INTEGRATED** (PR #5, merge
+  `b4a7416e6cdb19fd016a65bc32a983d18f7655fe`, 2026-10-13T21:17:43Z):
+  integration CI run
+  [38469504073](https://github.com/JoaoGaValentim/xlang/actions/runs/38469504073)
+  green on all four jobs; `main` contains `xl-lexer`, `xl-ast`, and
+  `xl-parser`.
+- **Phase 1 — CLI IMPLEMENTED** (Directive 009, branch `phase/1-cli`):
+  `xl-cli` provides the `xc` binary with `xc parse <file.x>` (canonical AST
+  on stdout via the accepted printer, diagnostics on stderr via `xl-diag`,
+  deterministic exit codes `0`/`1`/`2`), plus `xc --help`/`--version`.
+  End-to-end tests invoke the real binary with real `.x` files and cover
+  the archived specification example, the accepted feature corpus,
+  determinism, round-trip printing, robustness, and every documented
+  usage/file error. Pending owner review. CI run
+  [38484468487](https://github.com/JoaoGaValentim/xlang/actions/runs/38484468487)
+  on `63d2af3` is green on all four jobs (Format, ubuntu, windows, macos).
+  Directive 009 did not modify `xl-lexer`, `xl-ast`, or `xl-parser` code,
+  so the recorded combined lexer/parser fuzz evidence remains valid.
+- **Phase 1 — EMPTY-FILE CONFORMANCE FIX** (Directive 009-R1): an
+  independent review identified that the CLI rejected byte-empty source
+  files with exit `2` although the accepted grammar defines
+  `module = { item }`, which allows zero items and is already how
+  whitespace-only and comment-only inputs are handled. The CLI now parses
+  a zero-byte file as the valid empty module: exit `0`, no diagnostics, and
+  empty canonical output (zero items), exactly like trivia-only input.
+  Missing, unreadable, directory, invalid UTF-8, `u32`-limit, usage, and
+  source-diagnostic behaviors are unchanged. Tests and documentation were
+  corrected accordingly; `xl-lexer`, `xl-ast`, and `xl-parser` were not
+  modified. CI run
+  [38488945189](https://github.com/JoaoGaValentim/xlang/actions/runs/38488945189)
+  on `a84e8c4` is green on all four jobs (Format, ubuntu, windows, macos;
+  CI-observed test counts 484/484/482, Windows excluding the two documented
+  `#[cfg(unix)]` reproducibility tests).
 - **Phase 1 — LEXER/PARSER FUZZING ACCEPTED** (Directive 008): the
   combined `lex_parse` fuzz target completed the specification's one-hour
   criterion on `017962b` — 9,111,364 runs in 3601 s, zero crashes. The
@@ -53,9 +85,9 @@ criteria have been verified and the project owner has approved advancement
   diagnostic cascade; printer non-idempotence after block-like statements)
   and one round-trip printer defect was found by property testing (cast
   tails before `<`); all three are fixed with regression tests
-  (`1e427f6`, `94b11c7`, `017962b`). The remaining Phase 1 acceptance
-  criterion (all specification examples parse) is satisfied for the
-  parser/AST; the milestone `xc parse` still requires the CLI stage.
+  (`1e427f6`, `94b11c7`, `017962b`). The remaining Phase 1 milestone,
+  `xc parse`, is implemented and pending owner review (see the CLI entry
+  above).
 
 ## Phase 0 closure record (final — Directives 002–004, 2026-10-12)
 
@@ -104,21 +136,54 @@ criteria have been verified and the project owner has approved advancement
 | ADR for the ratified syntax contract | ACCEPTED | `docs/decisions/adr-0004-phase-1-syntax-contract.md` |
 | `xl-lexer` implementation | IMPLEMENTED — INTEGRATED (Directive 006) | `crates/xl-lexer`; merged via PR #3 (merge `9ed50ad`); 104 lexer tests (148 workspace-wide at merge, 0 failed); CI runs 38328242463 (`d2972b8`) and 38328884949 (`d48a622`) green on all four jobs |
 | `xl-ast` implementation | IMPLEMENTED — INTEGRATED (Directive 007) | `crates/xl-ast`; data model + canonical printer + structural validator; 94 AST tests (242 workspace-wide, 0 failed; CI-observed 242); 3 insta snapshots; merged via PR #4 (merge `df9e859`; integration CI run 38407939639, all four jobs green) |
-| `xl-parser` implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 008) | `crates/xl-parser`; recursive descent + Pratt expressions, ratified recovery sets, shared `MAX_PARSE_DEPTH = 64`, G-3 generic closing, interpolation integration; 187 parser tests (435 workspace-wide, 0 failed locally; CI-observed 435); 4 insta snapshots; spec example parses clean and round-trips; PR #5 pending owner review; CI run [38446643696](https://github.com/JoaoGaValentim/xlang/actions/runs/38446643696) on `017962b` green on all four jobs |
+| `xl-parser` implementation | IMPLEMENTED — INTEGRATED (Directive 008) | `crates/xl-parser`; recursive descent + Pratt expressions, ratified recovery sets, shared `MAX_PARSE_DEPTH = 64`, G-3 generic closing, interpolation integration; 187 parser tests; 4 insta snapshots; spec example parses clean and round-trips; merged via PR #5 (merge `b4a7416`; integration CI run [38469504073](https://github.com/JoaoGaValentim/xlang/actions/runs/38469504073) on the merge commit, all four jobs green) |
+| `xl-cli` (`xc parse`) implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 009) | `crates/xl-cli`; binary `xc`; hand-written argument parsing (no CLI dependency); file loading with recoverable I/O and UTF-8 decoding; `SourceMap` registration; accepted `xl-parser` API; diagnostics via `xl-diag` on stderr; canonical AST via `xl-ast::print_items` on stdout; exit codes `0`/`1`/`2` documented as CLI policy; 49 crate tests (15 unit + 34 end-to-end invoking the real binary); 484 workspace-wide tests, 0 failed locally; conformance fixture for the specification example byte-identical to the parser canonical snapshot; empty-module conformance corrected under Directive 009-R1 (byte-empty, whitespace-only, and comment-only inputs all parse as the valid empty module); CI run [38488945189](https://github.com/JoaoGaValentim/xlang/actions/runs/38488945189) on `a84e8c4` green on all four jobs (Format, ubuntu, windows, macos; CI-observed 484/484/482) |
 | `xl-lexer` fuzz harness (preliminary evidence) | PASS — preliminary only | `fuzz/fuzz_targets/lex_tokens.rs`; 1,848,945 runs in 61 s on the local nightly toolchain, zero crashes and zero artifacts. Superseded by the combined lexer/parser fuzzing row below for acceptance purposes |
 | Combined lexer/parser fuzzing (Phase 1 acceptance criterion: 1 hour without failures) | **PASS** | `fuzz/fuzz_targets/lex_parse.rs` on revision `017962b`: **9,111,364 runs in 3601 s** (average 2,530 exec/s, peak RSS 770 MB, 22,355 corpus units added), zero crashes, zero sanitizer failures, no new artifacts. The two earlier attempts found and fixed real defects before this run: a match-arm diagnostic cascade (`crash-67a0b82e…`) and printer non-idempotence (`crash-206b3a0c…`), both with regression tests |
-| `xl-parser`, `xc parse` | `xl-parser` IMPLEMENTED — PENDING OWNER REVIEW; `xc parse` NOT STARTED | Directive 008 (parser authorized); CLI remains unauthorized (Directives 004–007) |
+| `xl-parser`, `xc parse` | `xl-parser` INTEGRATED (PR #5); `xc parse` IMPLEMENTED — PENDING OWNER REVIEW (Directive 009; empty-module conformance corrected under Directive 009-R1) | Directive 008 (parser authorized); Directives 009 and 009-R1 (CLI authorized) |
 | Phase 1 docs CI (proposal set) | PASS | PR #2 merged as `db2437b`; run 38323917744 all four jobs green |
+
+## Phase 1 acceptance tracking (Directive 009 audit, 2026-10-13)
+
+Classification vocabulary: **PASS**, **FAIL**, **NOT VERIFIED**,
+**PENDING OWNER APPROVAL**.
+
+| # | Acceptance criterion | Status | Evidence |
+| --- | --- | --- | --- |
+| 1 | Phase 0 was accepted and integrated | PASS | Directive 004 §2; PR #1 merge `4d82106`; CI run 38314053579 |
+| 2 | Lexical contracts are implemented | PASS | `crates/xl-lexer` (104 tests); PR #3 merge `9ed50ad` |
+| 3 | Parser and AST contracts are implemented | PASS | `crates/xl-ast` (PR #4), `crates/xl-parser` (PR #5); 435-test baseline |
+| 4 | All authoritative specification examples parse | PASS | the complete §3 example parses clean through the real `xc parse` and round-trips (`crates/xl-cli/tests/cli_success.rs`) |
+| 5 | Source spans and diagnostics are correct | PASS | lexer/parser/diagnostic suites; CLI exact-stderr diagnostics tests; UTF-8 offset preservation |
+| 6 | Error recovery is tested | PASS | `crates/xl-parser/tests/recovery.rs`; CLI multiple-independent-errors and determinism tests |
+| 7 | Canonical AST printing is functional | PASS | `xl-ast` printer suites; CLI fixture equality with the parser snapshot |
+| 8 | Parser/AST round-trip equivalence tests pass | PASS | `crates/xl-parser/tests/roundtrip.rs`, `properties.rs`; CLI corpus round-trip |
+| 9 | One-hour lexer/parser fuzz evidence is valid | PASS | `lex_parse` on `017962b`: 9,111,364 runs / 3601 s, zero crashes; lexer/parser code unchanged by Directive 009 |
+| 10 | The real `xc parse` command works | PASS | end-to-end tests invoke the built binary; 666-byte canonical output for the example; exit codes `0`/`1`/`2` verified |
+| 11 | CI is green on the final CLI revision | PASS | run [38488945189](https://github.com/JoaoGaValentim/xlang/actions/runs/38488945189) on `a84e8c4` (the Directive 009-R1 fix revision; subsequent commits are documentation-only): Format and Check (ubuntu-latest, macos-latest, windows-latest) all green; CI-observed counts 484/484/482 tests (Windows omits the two documented `#[cfg(unix)]` reproducibility tests) |
+| 12 | Original specification archive is unchanged | PASS | SHA-256 `c3c6bce5…` re-verified during the Directive 009 merge gate |
+| 13 | No out-of-scope compiler functionality exists | PASS | `crates/` contains exactly `xl-span`, `xl-diag`, `xl-lexer`, `xl-ast`, `xl-parser`, `xl-cli` |
+| 14 | All known limitations are documented | PASS | `docs/architecture.md` §3 (`xl-cli`; exit codes, empty-file policy, rendering limits); README status and limitations |
+| — | Phase 1 formal acceptance | **PENDING OWNER APPROVAL** | requires the CLI Pull Request to be merged and an explicit owner decision; this audit is a closure recommendation, not self-approval |
 
 ## Notes
 
 - Phase 0 is complete and integrated; the archived original specification
   and accepted ADRs are frozen except by owner decision.
-- The Phase 1 contracts are ratified (Directive 006; ADR-0004). The lexer
-  and the AST are integrated (PR #3, PR #4); the parser is implemented and
-  pending owner review (PR #5); `xc parse` remains not started, so the
-  Phase 1 acceptance criteria (all specification examples parse; combined
-  lexer/parser fuzzing) are not yet fully claimed.
+- The Phase 1 contracts are ratified (Directive 006; ADR-0004). The lexer,
+  the AST, and the parser are integrated (PR #3, PR #4, PR #5); `xc parse`
+  is implemented in `xl-cli` and pending owner review under Directive 009,
+  together with the acceptance audit above. Formal Phase 1 acceptance
+  remains a project-owner decision after the CLI Pull Request is merged.
+- CLI exit codes are a documented command contract: `0` success, `1`
+  lexical/syntactic source errors, `2` usage/I/O/internal errors (CLI
+  policy; `docs/architecture.md` §3, `xl-cli`). A source file is one
+  module: a byte-empty, whitespace-only, or trivia-only file is the valid
+  empty module (`module = { item }`) and succeeds with no output and no
+  diagnostics (Directive 009-R1 conformance fix).
+- Directive 009 modified no `xl-lexer`, `xl-ast`, or `xl-parser` code; the
+  combined fuzz evidence on `017962b` therefore remains representative of
+  the frontend behavior shipped with the CLI. No new fuzz run was claimed.
 - The lexer-contract example erratum was **corrected editorially** under
   Directive 007 §11: the `"{ "abc }"` row now describes the implemented,
   accepted behavior (pinned by the test

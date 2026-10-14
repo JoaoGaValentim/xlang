@@ -16,7 +16,7 @@ implementation.
 | Phase | Name | Original estimate | Milestone (original §6) | Status |
 | --- | --- | --- | --- | --- |
 | 0 | Foundation (*Fundação*) | 1–2 weeks | Workspace, CI, initial specification | ACCEPTED — integrated via PR #1 (merge `4d82106`); see `docs/phase-status.md` |
-| 1 | Lexical and syntactic frontend (*Frontend léxico e sintático*) | 3–4 weeks | `xc parse arquivo.x` prints the AST | IN PROGRESS — contracts ratified (Directive 006); lexer and AST integrated (PR #3, PR #4); parser implemented, pending owner review (Directive 008); CLI not started |
+| 1 | Lexical and syntactic frontend (*Frontend léxico e sintático*) | 3–4 weeks | `xc parse arquivo.x` prints the AST | IN PROGRESS — contracts ratified (Directive 006); lexer, AST, and parser integrated (PR #3–#5); CLI (`xc parse`) implemented, pending owner review (Directive 009) |
 | 2 | Name resolution and types (*Resolução de nomes e tipos*) | 6–8 weeks | `xc check` with precise type errors | NOT STARTED |
 | 3 | MIR | 3–4 weeks | `xc mir` prints the CFG | NOT STARTED |
 | 4 | Bytecode VM (*VM de bytecode*) | 4–6 weeks | `xc run hello.x` executes programs | NOT STARTED |
@@ -60,12 +60,15 @@ Final state (2026-10-12, Directives 002–004):
 ## Phase 1 — Lexical and syntactic frontend — IN PROGRESS
 
 Contracts ratified (Directive 006; ADR-0004). The lexical frontend
-(`xl-lexer`) and the syntax tree (`xl-ast`) are implemented and integrated
-(PR #3, PR #4); the syntactic parser (`xl-parser`, Directive 008) is
-implemented and pending owner review. The CLI (`xc parse`) remains
-**not started**; the Phase 1 acceptance criteria (all specification
-examples parse; 1 hour of combined lexer/parser fuzzing without failures)
-therefore cannot yet be fully claimed.
+(`xl-lexer`), the syntax tree (`xl-ast`), and the syntactic parser
+(`xl-parser`) are implemented and integrated (PR #3, PR #4, PR #5). The
+CLI milestone `xc parse` is implemented in `xl-cli` (Directive 009) with
+end-to-end conformance tests, and is pending owner review. The Phase 1
+acceptance evidence is recorded (the complete specification example
+parses and round-trips; 1 hour of combined lexer/parser fuzzing without
+failures); formal acceptance awaits the CLI Pull Request merge and the
+project owner's decision (see the Directive 009 audit in
+`docs/phase-status.md`).
 
 Scope and deliverables (original §6):
 
@@ -83,11 +86,10 @@ the lexer/parser (no panics); the property `parse(print(ast)) == ast`.
 Acceptance criteria (original §6): 100% of the specification examples parse;
 1 hour of fuzzing without failures.
 
-Dependencies: Phase 0 accepted (satisfied). The design gate is active: the
-proposed contracts in `docs/proposals/phase-1/` require owner approval
-before implementation, and an implementation directive is still required.
-The former open questions (PD-002…PD-006) are addressed by those proposals
-and remain formally open until the owner approves the decision packet.
+Dependencies: Phase 0 accepted (satisfied). The Phase 1 contracts are
+ratified (Directive 006; ADR-0004) and the implementation directives were
+issued (Directives 006–009). Remaining before closure: the CLI Pull
+Request merge and the project owner's formal acceptance decision.
 
 ## Phase 2 — Name resolution and type system — NOT STARTED
 

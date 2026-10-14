@@ -1,0 +1,19 @@
+[package]
+name = "xl-cli"
+description = "Command-line interface (xc) for the XLANG compiler frontend"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "xc"
+path = "src/main.rs"
+
+[dependencies]
+xl-span.workspace = true
+xl-diag.workspace = true
+xl-ast.workspace = true
+xl-parser.workspace = true

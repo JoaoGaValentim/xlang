@@ -6,6 +6,7 @@ members = [
     "crates/xl-lexer",
     "crates/xl-ast",
     "crates/xl-parser",
+    "crates/xl-cli",
 ]
 
 [workspace.package]
