@@ -1,6 +1,6 @@
 # XLANG Phase 2 — Diagnostics Contract
 
-**STATUS: PROPOSED — PENDING OWNER RATIFICATION**
+**STATUS: OWNER-RATIFIED (Directive 010-R3) — PENDING INTEGRATION (PR #7 not merged)**
 
 - **Directive:** Engineering Directive 010 §11 (diagnostic contract),
   §12 (PD-009 review), amended by Engineering Directive 010-R1 §3–§4

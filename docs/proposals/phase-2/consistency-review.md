@@ -1,6 +1,6 @@
 # XLANG Phase 2 — Consistency Review
 
-**STATUS: PROPOSED — PENDING OWNER RATIFICATION**
+**STATUS: REVIEW OF OWNER-RATIFIED PACKAGE (Directive 010-R3) — PENDING INTEGRATION (PR #7 not merged)**
 
 - **Directive:** Engineering Directive 010 §14 (required documents) and
   §17 (quality gates: “Verify the design documents are internally
@@ -52,7 +52,7 @@ conformance sketches).
 | # | Check | Result |
 | --- | --- | --- |
 | 1 | All ten documents present (`architecture-rfc`, `hir-contract`, `lowering-contract`, `name-resolution-contract`, `type-system-contract`, `traits-and-exhaustiveness`, `diagnostics-contract`, `conformance-plan`, `decision-packet`, this review) | PASS |
-| 2 | Every document carries `STATUS: PROPOSED — PENDING OWNER RATIFICATION`; the only occurrence of “ACCEPTED” in the package is the decision packet’s description of post-ratification mechanics | PASS |
+| 2 | Status is coherent after Directive 010-R3: the eight contract documents and the decision packet carry `STATUS: OWNER-RATIFIED (Directive 010-R3) — PENDING INTEGRATION (PR #7 not merged)`; the ratification record is `decision-packet.md` §13 and `docs/decisions/adr-0005-phase-2-semantic-architecture.md`; no document claims `main` integration or implementation | PASS (after T-2) |
 | 3 | Decision IDs: 8 Category A (`P2D-A1`…`P2D-A8`) + 21 Category B (`P2D-B1`…`P2D-B20`, `P2D-B22`; `P2D-B21` reclassified to `P2D-A8`) defined in `decision-packet.md`; every reference resolves to a packet row (or the `P2D-B21`→`P2D-A8` redirect); every row is referenced by at least one companion document | PASS (after R-6) |
 | 4 | Cross-document section references (`…md` §x) resolve to existing headings | PASS (after F-4, F-5, R-7) |
 | 5 | Shared constants: resource budgets (`MAX_HIR_DEPTH = 256`, `MAX_HIR_NODES = 1_000_000`, `MAX_DEFS = 100_000`, `MAX_USES = 1_000_000`, `MAX_MODULE_GRAPH_MODULES = 1_024`, `MAX_MODULE_GRAPH_EDGES = 16_384`, `MAX_MODULE_GRAPH_DEPTH = 256`, `MAX_TYPE_DEPTH = 128`, `MAX_UNIFY_STEPS = 100_000`, `MAX_INSTANTIATIONS = 10_000`, `MAX_TRAIT_DEPTH = 32`, `MAX_PATTERN_CELLS = 250_000`), exit-code policy (`0`/`1`/`2`), prelude contents, `Range<T>` protocol, `BuiltinOp` set, `ModuleId`/`PackageId`/`GlobalDefId`, and stage signatures agree across the documents that state them | PASS (after R-3, R-4) |
@@ -100,11 +100,11 @@ required audit points.
 | 6 | Source mappings refer only to identifiers that actually exist | PASS | `P2D-A2`/`hir-contract.md` §4.4: `AstOrigin` uses `ItemId`/`ExprId` only where the AST assigns them; `Structural { anchor, path }` otherwise; spans never keys; verified against `crates/xl-ast/src/id.rs` |
 | 7 | Module and package identities consistent | PASS | `ModuleId`/`PackageId`/`GlobalDefId` in `hir-contract.md` §3, `name-resolution-contract.md` §9.2/§9.5, `type-system-contract.md` §3 (`Nominal { def: GlobalDefId, .. }`), `traits-and-exhaustiveness.md` §2.5 |
 | 8 | Orphan-rule terminology consistent across documents | PASS | “package”-scoped ownership everywhere: `P2D-B14`, `traits-and-exhaustiveness.md` §2.5/§2.8, `diagnostics-contract.md` §5.9; the old “current module” wording is removed |
-| 9 | API signatures and dependency direction agree | PASS | `P2D-A1`: `lower(&[Item], FileId, &ModuleRegistry)`, `check(&HirModule, &Resolutions)`; dependency graph vs data flow separated (`architecture-rfc.md` §2.2/§3); `xl-hir` does not depend on `xl-parser` |
+| 9 | API signatures and dependency direction agree; no contradictory stage signatures | PASS | `P2D-A1` (amended, Directive 010-R3 §4): `lower(&[Item], FileId, &ModuleRegistry) -> LowerOutput { module, resolutions, import_edges, diagnostics, fate }`, separate `validate_module_graph(&ModuleRegistry) -> Vec<Diagnostic>`, `check(&HirModule, &Resolutions)`; dependency graph vs data flow separated (`architecture-rfc.md` §2.2/§3); `xl-hir` does not depend on `xl-parser` |
 | 10 | Resource limits finite and explicit | PASS | `P2D-A7` canonical budget list (HIR, module graph, types, traits, patterns); `MAX_HIR_DEPTH` defined; mirrored in `type-system-contract.md` §16 and conformance §7.2 |
 | 11 | Phase 2 vs Phase 5 responsibilities clearly separated | PASS | `architecture-rfc.md` §1; `P2D-B14` impl scope; `lowering-contract.md` §4.1/§6.3; `conformance-plan.md` §8 |
 | 12 | Conformance fixtures match the updated decisions | PASS | `conformance-plan.md`: nm-ok-8, nm-err-8/8b/8c/11, §7.3 mg-1…mg-9, acceptance §6 |
-| 13 | All semantic proposals remain explicitly pending | PASS | every document carries `STATUS: PROPOSED — PENDING OWNER RATIFICATION`; packet approval mechanics unchanged; §5 below |
+| 13 | Decision status is explicit and not self-ratified | PASS | the individual decisions are owner-ratified via Directive 010-R3 (`decision-packet.md` §13); Category C remains DEFERRED; PD-009/PD-010 remain OPEN; no implementation authorized; ratification ≠ integration (§5 below) |
 | 14 | No compiler implementation added | PASS | diff is documentation-only; `crates/` unchanged (`git diff --stat` limited to `docs/`, `README.md`) |
 
 ### 3.2 Regression findings and dispositions
@@ -144,6 +144,23 @@ recorded here with their resolutions and evidence, in the same style as
 No S-finding changes language semantics. S-1…S-4 resolve the four items
 in Directive 010-R2 §3–§6 and introduce no new syntax or semantics.
 
+## 3.4 Ratification and final integration check (Directive 010-R3)
+
+Directive 010-R3 ratified the individual decisions and applied one final
+integration amendment. This section records the checks and outcomes.
+
+| ID | Check / finding | Disposition |
+| --- | --- | --- |
+| T-1 | `LowerOutput` did not expose the import edges `lower` was said to return, and graph validation was described as a step **inside** lowering even though the caller had not yet registered the returned edges | Amended: `LowerOutput` now carries `import_edges: Vec<ImportEdge>`; graph validation is the separate, caller-invoked `xl_hir::validate_module_graph(&ModuleRegistry)`; the orchestration order (register → lower immutably → collect → record → validate → check) is specified (`lowering-contract.md` §1.1–§1.2, `architecture-rfc.md` §3–§4, `P2D-A1`/`P2D-A5`) |
+| T-2 | Document status still said `PROPOSED — PENDING OWNER RATIFICATION` after the owner ratified the decisions | Updated: the eight contract documents and the decision packet now read `OWNER-RATIFIED (Directive 010-R3) — PENDING INTEGRATION (PR #7 not merged)`; the ratification record is `decision-packet.md` §13 and `adr-0005-phase-2-semantic-architecture.md` |
+| T-3 | Category C and PD-009/PD-010 status must not be silently changed by ratification | Confirmed unchanged: C1–C11 remain DEFERRED; PD-009/PD-010 remain OPEN; `P2D-A8` remains interim policy only |
+| T-4 | No premature graph validation; no unregistered edges omitted from cycle detection; no contradictory stage signatures; no duplicated HIR identities | Verified: lowering reads the registry immutably and performs no traversal; the validator runs only after `record_import`; the only stage signatures in the package are the amended `lower`/`validate_module_graph`/`check`; HIR identity is `HirId` plus the unique occurrence key (`P2D-A2`) |
+| T-5 | Ratification could be mistaken for `main` integration or implementation authorization | Clarified throughout: the design is **owner-ratified but pending integration**; `main` is unchanged; WP-A remains unauthorized until PR #7 is merged, post-merge CI is green, and the owner issues a separate directive |
+| T-6 | Original specification and spec docs must not conflict with the ADR/contracts | Verified: `docs/spec-v0.1-original.txt` unchanged (SHA-256 `c3c6bce5…`); ADR-0005 states the original retains priority and the packet fills gaps only |
+
+No T-finding changes language semantics; T-1 is the sole interface
+amendment and is architectural.
+
 ## 4. Review notes for the owner
 
 - **Highest-judgment decisions.** The items most likely to deserve close
@@ -172,11 +189,19 @@ in Directive 010-R2 §3–§6 and introduce no new syntax or semantics.
 ## 5. Status statement
 
 At the time of this review — after the Engineering Directive 010-R1 audit
-corrections (§3.1/§3.2) and the Engineering Directive 010-R2 final
-contract corrections (§3.3) — the Phase 2 design package is internally
+corrections (§3.1/§3.2), the Engineering Directive 010-R2 final contract
+corrections (§3.3), and the Engineering Directive 010-R3 ratification and
+A1/A5 amendment (§3.4) — the Phase 2 design package is internally
 consistent, complete against the Directive 010 §14 file list, free of
 unresolved editorial defects, satisfies the Directive 010-R1 §11
-regression points and the Directive 010-R2 §3–§6 corrections, and contains
-no self-ratification. It remains a proposal: all decisions (`P2D-A1`…`A8`,
-`P2D-B1`…`B20`, `P2D-B22`, `P2D-C1`…`C11`) are PENDING, PD-009 and PD-010
-remain OPEN, no contract is accepted, and no implementation is authorized.
+regression points, and contains no self-ratification.
+
+**Decision status:** the individual decisions are **owner-ratified** via
+Directive 010-R3 — Category A `P2D-A1`…`A8` and Category B `P2D-B1`…`B20`,
+`P2D-B22` — and recorded in `decision-packet.md` §13 and
+`adr-0005-phase-2-semantic-architecture.md`. Category C `C1`…`C11` remains
+**DEFERRED**; `PD-009` and `PD-010` remain **OPEN**. The design is
+**owner-ratified but pending integration**: it is **not** yet part of
+`main` (PR #7 is open and unmerged), and **no implementation is
+authorized** — WP-A…WP-D require a separate owner directive after PR #7 is
+merged and post-merge CI passes.

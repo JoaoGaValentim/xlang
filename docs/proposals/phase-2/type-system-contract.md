@@ -1,6 +1,6 @@
 # XLANG Phase 2 — Type System Contract
 
-**STATUS: PROPOSED — PENDING OWNER RATIFICATION**
+**STATUS: OWNER-RATIFIED (Directive 010-R3) — PENDING INTEGRATION (PR #7 not merged)**
 
 - **Directive:** Engineering Directive 010 §9 (static type system design),
   §16 (safety and performance analysis), amended by Engineering Directive

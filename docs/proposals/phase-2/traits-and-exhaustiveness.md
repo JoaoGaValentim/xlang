@@ -1,6 +1,6 @@
 # XLANG Phase 2 — Traits, Coherence, and Match Exhaustiveness
 
-**STATUS: PROPOSED — PENDING OWNER RATIFICATION**
+**STATUS: OWNER-RATIFIED (Directive 010-R3) — PENDING INTEGRATION (PR #7 not merged)**
 
 - **Directive:** Engineering Directive 010 §9 (traits, coherence, orphan
   rule) and §10 (Maranget-style exhaustiveness proposal), amended by

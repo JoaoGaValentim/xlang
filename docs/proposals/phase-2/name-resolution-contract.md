@@ -1,6 +1,6 @@
 # XLANG Phase 2 — Name Resolution Contract
 
-**STATUS: PROPOSED — PENDING OWNER RATIFICATION**
+**STATUS: OWNER-RATIFIED (Directive 010-R3) — PENDING INTEGRATION (PR #7 not merged)**
 
 - **Directive:** Engineering Directive 010 §8 (complete name-resolution
   architecture), amended by Engineering Directive 010-R1 §3 (executable
@@ -431,7 +431,12 @@ Contract consequences:
 
 The Phase 2 deliverable **requires** cyclic-import detection (SPECIFIED
 §6). Phase 2 therefore ships an executable, deterministic module-graph
-validator, not merely a written algorithm:
+validator, not merely a written algorithm. It is a **separate,
+caller-invoked stage** of `xl-hir` — `validate_module_graph(&ModuleRegistry)
+-> Vec<Diagnostic>` — **not** a step inside `lower` (Directive 010-R3
+§4.3): `lower` reads an immutable registry and *returns* the edges it
+discovered (`LowerOutput.import_edges`); the caller registers them and only
+then invokes the validator (`lowering-contract.md` §1.1–§1.2).
 
 - **Graph input.** The detector takes **only `&ModuleRegistry`** and reads
   the graph from its enumeration methods — no other input:

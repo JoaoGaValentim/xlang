@@ -1,6 +1,6 @@
 # XLANG Phase 2 — Lowering and Desugaring Contract
 
-**STATUS: PROPOSED — PENDING OWNER RATIFICATION**
+**STATUS: OWNER-RATIFIED (Directive 010-R3) — PENDING INTEGRATION (PR #7 not merged)**
 
 - **Directive:** Engineering Directive 010 §7 (AST→HIR lowering and the
   required desugaring designs).
@@ -16,19 +16,24 @@
 ## 1. Lowering pipeline (order of operations)
 
 Lowering a file (or, in the registry harness, each registered module)
-proceeds in a fixed, deterministic order:
+proceeds in a fixed, deterministic order. **Lowering does not perform
+graph validation** (Directive 010-R3 §4.3): it reads an **immutable**
+registry and *returns* the import edges it discovered; the caller registers
+them and then invokes the graph validator separately (see §1.1).
 
 1. **Module scan** — collect module-level items in source order into
    definitions (two-pass: collect names first, then lower bodies, so
    module items are order-independent; `name-resolution-contract.md` §5).
-2. **Import registration and graph build** — lower `ImportDecl`s, create
+2. **Import resolution and edge collection** — lower `ImportDecl`s, create
    module bindings, resolve each import target against the caller-provided
-   `ModuleRegistry` (§2.3: `resolve`/`surface`), and produce the resulting
-   **`ImportEdge` with its span and `ImportTarget`** in the module’s
-   declaration order (`P2D-A5`, `P2D-B7`). `lower` returns these edges in
-   `LowerOutput`; the caller records them into the registry via
-   `record_import` so the detector (step 5) sees the complete graph.
-   Missing/unavailable imports are resolved **fail closed**
+   `ModuleRegistry` (§2.3: `resolve`/`surface`), and **collect** the
+   resulting `ImportEdge { from, path, span, target }` (with its span and
+   `ImportTarget`) in the module’s declaration order (`P2D-A5`, `P2D-B7`).
+   `lower` **returns** these edges in `LowerOutput.import_edges`; it does
+   **not** register them and does **not** traverse the graph. The caller
+   records them via `record_import` **after** lowering (§1.1), so the
+   separate graph validator sees the complete graph. Missing/unavailable
+   imports are resolved **fail closed**
    (`name-resolution-contract.md` §9.3).
 3. **Signature lowering** — lower generics, parameters, and return types
    of every function/method/trait item into `TypeRef`s; lower struct
@@ -38,25 +43,91 @@ proceeds in a fixed, deterministic order:
    every name use against the scope tables as it goes (sequential
    visibility for locals; hoisted items per `P2D-B3`, §3.2), and apply the
    three desugarings (§4–6) at the point of the originating construct.
-5. **Import-graph validation** — run deterministic cycle detection over
-   the complete graph the registry enumerates: `registry.modules()` for the
-   node set and `registry.imports_of(m)` for each module’s edges
-   (`P2D-A5`, §2.3; `name-resolution-contract.md` §9.4). When a registry of
-   multiple modules is supplied, this reports real cycles in the source
-   order of import declarations; with the single-module registry it is
-   vacuous.
-6. **Structural validation** — run the structural HIR validator on the
+5. **Structural validation** — run the structural HIR validator on the
    result (`hir-contract.md` §9).
 
 Lowering never reorders user code except where a desugaring specifies it;
-diagnostics from all steps are emitted in this order.
+diagnostics from steps 1–4 are emitted in this order.
 
-`lower` receives `(&[Item], FileId, &ModuleRegistry)` and returns
-`LowerOutput { module, resolutions, diagnostics, fate }`
-(`architecture-rfc.md` §3, `P2D-A1`). It does **not** depend on
-`xl-parser`: it consumes `xl_ast::Item` values. If checked id allocation
-is exhausted, `fate = StageFate::Aborted` and the result is unusable for a
-successful check (`hir-contract.md` §4.3/§7.6).
+`lower` receives `(&[Item], FileId, &ModuleRegistry)` — **by shared,
+immutable reference** — and returns the result struct `LowerOutput`
+(`architecture-rfc.md` §3, `P2D-A1`):
+
+```rust
+// Indicative layout; the observable contract is the field set.
+pub struct LowerOutput {
+    pub module: HirModule,
+    pub resolutions: Resolutions,
+    pub import_edges: Vec<ImportEdge>,   // discovered edges, caller records them
+    pub diagnostics: Vec<Diagnostic>,
+    pub fate: StageFate,
+}
+```
+
+`lower` does **not** depend on `xl-parser`: it consumes `xl_ast::Item`
+values. It never mutates the registry (no interior mutability, no global
+state). If checked id allocation is exhausted, `fate =
+StageFate::Aborted` and the result is unusable for a successful check
+(`hir-contract.md` §4.3/§7.6).
+
+### 1.1 Orchestration and the graph-validation stage (Directive 010-R3 §4)
+
+Graph validation belongs to `xl-hir` but is a **separate, caller-invoked
+entry point**, not a step inside `lower`. The caller (the CLI, or the
+conformance harness) owns the **mutable** registry and sequences:
+
+1. **Register first.** Register all known modules and their available
+   interfaces (`register`, and any pre-known edges) before resolving
+   imports, so `resolve`/`surface` can answer during lowering.
+2. **Lower against an immutable snapshot.** Call
+   `lower(&[Item], FileId, &registry)` — shared reference; the registry is
+   observed immutably.
+3. **Collect edges.** Read `LowerOutput.import_edges`.
+4. **Register the new edges.** Call `registry.record_import(edge)` for each
+   returned edge (mutably owned by the caller) — after lowering, never
+   during it.
+5. **Validate the graph.** Only now call the validator over the registry:
+   `xl_hir::validate_module_graph(&registry) -> Vec<Diagnostic>` (see
+   §1.2). Running it earlier would miss the just-discovered edges.
+6. **Propagate diagnostics** deterministically: import-resolution
+   diagnostics from lowering, then graph (cycle) diagnostics, in the
+   documented order (`diagnostics-contract.md` §3).
+7. **Continue to `check`** per the poisoned-node and `StageFate`
+   contracts.
+8. **Never report success if required import or graph validation failed:**
+   any missing/unavailable import or detected cycle keeps `xc check` from
+   exit `0` (`P2D-A6`).
+
+For a **synthetic multi-module compilation**, the harness registers every
+module and `record_import`s every module’s edges **before** the final
+`validate_module_graph` call. For the **single-file CLI**, the same
+ordering applies (one module, its edges registered, then validation —
+vacuously acyclic). The registry is never mutated through an immutable
+reference; there is no hidden global state, interior mutability, or
+filesystem discovery.
+
+### 1.2 Graph validator contract and stage ownership
+
+```rust
+// Indicative signature; a member of xl-hir, invoked by the caller.
+// Reads the complete graph from the registry's enumeration methods only.
+pub fn validate_module_graph(registry: &ModuleRegistry) -> Vec<Diagnostic>;
+```
+
+- **Ownership:** the validator lives in `xl-hir` (module semantics are
+  `xl-hir`’s responsibility), but the **caller decides when** to invoke it
+  — after all edges are registered.
+- **Input:** `&ModuleRegistry` alone; nodes = `registry.modules()`, edges =
+  `registry.imports_of(m)` (§2.3). No filesystem, no package loading, no
+  globals.
+- **Output:** cycle diagnostics (`diagnostics-contract.md` §5.6), with the
+  deterministic witness path, primary/secondary spans, and duplicate-cycle
+  suppression of `name-resolution-contract.md` §9.4.
+- **Fail closed:** a graph that exceeds `MAX_MODULE_GRAPH_*` yields a
+  fail-closed diagnostic and never a silent pass.
+
+This keeps lowering pure and registry-immutable while still satisfying the
+original’s cyclic-import requirement (SPECIFIED §6).
 
 ## 2. Identity and span rules for lowered nodes
 
@@ -554,7 +625,8 @@ different primitive contract — see `P2D-B10` in the decision packet.
 | Printer float rule reused for formatting | ratified B-3; parser/AST contract §5(5) |
 | Module registry, import edges, fail-closed imports, executable cycle detection | SPECIFIED §6 Phase 2; Directive 010-R1 §3–§4; `P2D-A5`, `P2D-B7` |
 | Accurate AST→HIR origin; checked ids | Directive 010-R1 §5; `P2D-A2` |
-| `lower(&[Item], FileId, &ModuleRegistry)`; `StageFate` | Directive 010-R1 §7; `P2D-A1` |
+| `lower(&[Item], FileId, &ModuleRegistry) -> LowerOutput`; `StageFate` | Directive 010-R1 §7; Directive 010-R3 §4; `P2D-A1` |
 | Registry graph enumeration (`modules`/`imports_of`); complete detector input | Directive 010-R2 §3; `P2D-A5` |
 | Synthesized occurrence identity (`expansion`, `occurrence`) | Directive 010-R2 §4; `P2D-A2` |
 | `DefKind::ModuleBinding` import representation | Directive 010-R2 §5; `P2D-B7` |
+| `LowerOutput.import_edges`; separate graph-validation stage; orchestration order | Directive 010-R3 §4; `P2D-A1`, `P2D-A5` |

@@ -1,6 +1,6 @@
 # XLANG Phase 2 — HIR Contract
 
-**STATUS: PROPOSED — PENDING OWNER RATIFICATION**
+**STATUS: OWNER-RATIFIED (Directive 010-R3) — PENDING INTEGRATION (PR #7 not merged)**
 
 - **Directive:** Engineering Directive 010 §7 (HIR architecture), amended
   by Engineering Directive 010-R1 §5 (HIR identity and overflow safety)

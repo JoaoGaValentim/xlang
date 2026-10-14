@@ -1,6 +1,6 @@
 # XLANG Phase 2 — Conformance and Test Plan
 
-**STATUS: PROPOSED — PENDING OWNER RATIFICATION**
+**STATUS: OWNER-RATIFIED (Directive 010-R3) — PENDING INTEGRATION (PR #7 not merged)**
 
 - **Directive:** Engineering Directive 010 §15 (conformance and test
   planning), §16 (safety and performance), §17 (quality gates for a

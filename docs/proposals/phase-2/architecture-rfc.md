@@ -1,6 +1,6 @@
 # XLANG Phase 2 — Architecture RFC
 
-**STATUS: PROPOSED — PENDING OWNER RATIFICATION**
+**STATUS: OWNER-RATIFIED (Directive 010-R3) — PENDING INTEGRATION (PR #7 not merged)**
 
 - **Directive:** Engineering Directive 010 — Phase 1 Formal Closure and
   Phase 2 Architecture & Specification Gate (2026-10-14).
@@ -144,14 +144,25 @@ This is the complete permitted set (governance §6):
 The **pipeline data flow** — the values passed between stages, owned by
 `xl-cli` — is distinct from the crate dependency graph above:
 
+The caller (the CLI/harness) **owns** the mutable `ModuleRegistry` and
+sequences the stages (Directive 010-R3 §4.2). Graph validation is a
+**separate** `xl-hir` entry point invoked **after** the discovered edges
+are registered:
+
 ```text
+caller: registry.register(all known modules + interfaces)   ← before lowering
+  │
 source file
   │  xl_parser::parse_file(&SourceMap, FileId) -> ParseOutput   (Phase 1, accepted)
   ▼
 ParseOutput { items: Vec<Item>, diagnostics }
-  │  xl_hir::lower(&[Item], FileId, &ModuleRegistry)            ← registry supplied by caller
+  │  xl_hir::lower(&[Item], FileId, &registry)                 ← immutable registry snapshot
   ▼
-LowerOutput { module: HirModule, resolutions, diagnostics, fate } ← syntactic resolution + desugaring
+LowerOutput { module: HirModule, resolutions, import_edges, diagnostics, fate }
+  │  caller: for e in import_edges { registry.record_import(e) }   ← register after lowering
+  ▼
+  │  xl_hir::validate_module_graph(&registry) -> Vec<Diagnostic>   ← only now: cycle detection
+  ▼
   │  xl_types::check(&HirModule, &Resolutions)
   ▼
 CheckOutput { diagnostics, resolutions, fate }                    ← final fields/methods + types
@@ -165,22 +176,31 @@ phases are pure functions, newtype IDs in arenas, every error a
 `Diagnostic` with a `Span`, no panics on user input):
 
 1. `xl_hir::lower(&[Item], FileId, &ModuleRegistry)` is a pure function of
-   its inputs (AST items, the file id, and the caller-owned registry). It
-   returns a complete `HirModule` (partial HIR with error nodes on
-   malformed input), the syntactic `Resolutions`, diagnostics, and a
-   `StageFate` (`Complete` or `Aborted`). It performs no I/O.
-2. `xl_types::check(&HirModule, &Resolutions)` is a pure function of the
+   its inputs (AST items, the file id, and the caller-owned registry read
+   **immutably**). It returns a complete `HirModule` (partial HIR with
+   error nodes on malformed input), the syntactic `Resolutions`, the
+   discovered `import_edges`, diagnostics, and a `StageFate` (`Complete` or
+   `Aborted`). It performs no I/O and does **not** validate the module
+   graph.
+2. `xl_hir::validate_module_graph(&ModuleRegistry) -> Vec<Diagnostic>` is a
+   separate pure function invoked **after** the caller registers the
+   returned edges; it reads the complete graph from the registry’s
+   enumeration methods (`lowering-contract.md` §1.1–§1.2).
+3. `xl_types::check(&HirModule, &Resolutions)` is a pure function of the
    immutable HIR plus the syntactic resolutions and returns diagnostics, a
    resolution table (with type-directed field/method selections completed),
    and a `StageFate`. It never mutates the HIR (resolutions live in side
    tables; see `hir-contract.md` §6).
-3. Both stages are deterministic: identical inputs produce identical
+4. All stages are deterministic: identical inputs produce identical
    diagnostics in identical order, with no environment, time, or hash-map
    iteration-order dependence (`architecture.md` §4 INV-007 extended).
-4. Lexical and syntactic diagnostics from `ParseOutput` are rendered first
-   (their existing order), then lowering/resolution diagnostics, then type
-   diagnostics, each in deterministic traversal order
-   (`diagnostics-contract.md` §3).
+5. Lexical and syntactic diagnostics from `ParseOutput` are rendered first
+   (their existing order), then lowering/import-resolution diagnostics, then
+   graph (cycle) diagnostics, then type diagnostics, each in deterministic
+   traversal order (`diagnostics-contract.md` §3).
+6. The pipeline **never** reports success if required import or graph
+   validation failed: any missing/unavailable import or detected cycle
+   keeps `xc check` from exit `0` (`P2D-A6`).
 
 **Stage `fate` and the success contract.** `lower` and `check` return a
 `StageFate`. `Complete` means the stage ran to the end of the input within
@@ -209,11 +229,12 @@ everything.
 | Tokenization, syntax trees | `xl-lexer`, `xl-ast`, `xl-parser` (accepted) | Phase 1; spans per ADR-0002 |
 | AST → HIR shape mapping | `xl-hir` lowering | `hir-contract.md`, `lowering-contract.md` |
 | Definition collection (items, variants, fields, methods, params, locals) | `xl-hir` | `DefId`/`LocalId` allocation |
-| Imports registration; module bindings; import resolution (fail closed) | `xl-hir` | `P2D-B7` |
+| Import resolution; module bindings; **discovered-edge collection** (fail closed) | `xl-hir` (`lower`) | returns `LowerOutput.import_edges`; does not register or traverse (`P2D-B7`, `P2D-A1`) |
 | Syntactic name resolution (locals, items, paths, variants, prelude) | `xl-hir` | `name-resolution-contract.md` |
 | Desugaring (`for`, `?`, interpolation) | `xl-hir` | done before typing; `lowering-contract.md` §4–6 |
 | Duplicate/undefined/ambiguous name diagnostics | `xl-hir` | "did you mean" suggestions |
-| Module registry (in-memory) and cyclic-import detection | `xl-hir` | **executable in Phase 2** against a caller-provided synthetic registry (`P2D-A5`, `P2D-B7`); `name-resolution-contract.md` §9.4 |
+| **Module-graph validation (cycle detection)** — separate entry point `validate_module_graph` | `xl-hir` (validator), **caller** invokes after edges are registered | `P2D-A5`, `P2D-B7`; `lowering-contract.md` §1.1–§1.2; `name-resolution-contract.md` §9.4 |
+| Module registry ownership, module registration, edge registration | `xl-cli` (owns mutable registry); harness for synthetic modules | never a global; `P2D-A5` |
 | Mutability checking (`let mut`, assignment targets) | `xl-types` | needs types; `type-system-contract.md` §9 |
 | Type lowering (HIR `TypeRef` → `TyId`) | `xl-types` | `type-system-contract.md` §3 |
 | Inference, unification, literal defaulting | `xl-types` | §4–5 |
