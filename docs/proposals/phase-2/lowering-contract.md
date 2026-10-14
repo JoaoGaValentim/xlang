@@ -23,9 +23,13 @@ proceeds in a fixed, deterministic order:
    module items are order-independent; `name-resolution-contract.md` §5).
 2. **Import registration and graph build** — lower `ImportDecl`s, create
    module bindings, resolve each import target against the caller-provided
-   `ModuleRegistry`, and record the resulting **import edge with its spans**
-   (`P2D-A5`, `P2D-B7`). Missing/unavailable imports are resolved
-   **fail closed** (`name-resolution-contract.md` §9.3).
+   `ModuleRegistry` (§2.3: `resolve`/`surface`), and produce the resulting
+   **`ImportEdge` with its span and `ImportTarget`** in the module’s
+   declaration order (`P2D-A5`, `P2D-B7`). `lower` returns these edges in
+   `LowerOutput`; the caller records them into the registry via
+   `record_import` so the detector (step 5) sees the complete graph.
+   Missing/unavailable imports are resolved **fail closed**
+   (`name-resolution-contract.md` §9.3).
 3. **Signature lowering** — lower generics, parameters, and return types
    of every function/method/trait item into `TypeRef`s; lower struct
    fields and enum variants/payloads; lower impl headers.
@@ -34,8 +38,10 @@ proceeds in a fixed, deterministic order:
    every name use against the scope tables as it goes (sequential
    visibility for locals; hoisted items per `P2D-B3`, §3.2), and apply the
    three desugarings (§4–6) at the point of the originating construct.
-5. **Import-graph validation** — run deterministic cycle detection over the
-   import edges gathered in step 2 (`P2D-A5`, §2.3). When a registry of
+5. **Import-graph validation** — run deterministic cycle detection over
+   the complete graph the registry enumerates: `registry.modules()` for the
+   node set and `registry.imports_of(m)` for each module’s edges
+   (`P2D-A5`, §2.3; `name-resolution-contract.md` §9.4). When a registry of
    multiple modules is supplied, this reports real cycles in the source
    order of import declarations; with the single-module registry it is
    vacuous.
@@ -63,9 +69,17 @@ successful check (`hir-contract.md` §4.3/§7.6).
   zero-width and can share a span).
 - **Synthesized nodes** (desugaring temporaries, desugared control flow,
   formatting wrappers) carry the span of the originating construct and an
-  `Origin::Desugared { kind }` flag plus an `AstOrigin::Synthesized`
-  record (`P2D-A2`). Example: every node of the `for` expansion carries the
-  `for` expression's span, so a type error inside the desugared loop still
+  `Origin::Desugared { kind }` flag plus an
+  `AstOrigin::Synthesized { construct, expansion, occurrence }` record
+  (`P2D-A2`; `hir-contract.md` §4). **Identity vs. reference:** a desugaring
+  is inherently **one-to-many**, so many synthesized nodes legitimately
+  share one originating `construct`; uniqueness comes from the
+  `(expansion, occurrence)` pair, not from the construct. `occurrence` is
+  the 0-based index of the node in the fixed expansion traversal
+  (§4–§6); `expansion` distinguishes a nested desugaring under the same
+  construct (e.g. a `?` inside a `for` body), incrementing in expansion
+  order. Example: every node of the `for` expansion carries the `for`
+  expression's span, so a type error inside the desugared loop still
   points at the whole `for` statement (and diagnostics inside `BODY` —
   which has real spans — point at user text, not the expansion).
 - Internal temporaries (`__state`, `__item`, `__next`, `__v`, `__e`) are
@@ -88,43 +102,98 @@ successful check (`hir-contract.md` §4.3/§7.6).
 ### 2.3 Module registry and import-graph construction
 
 The registry is supplied by the caller (the CLI owns it; a test supplies a
-synthetic one) — `P2D-A5`. `lower` uses it, never the filesystem. The
-**indicative** interface:
+synthetic one) — `P2D-A5`. It is an **explicit, caller-owned, in-memory
+value** — never a mutable global, and never populated by filesystem
+discovery. `lower` reads it (by shared reference); it never mutates it.
+The **indicative** interface:
 
 ```rust
-// Indicative interface — Caller-provided, in-memory.
-pub trait ModuleRegistry {
+// Indicative interface — caller-owned, in-memory. No global state.
+pub struct ModuleRegistry { /* ... */ }
+
+impl ModuleRegistry {
+    // ---- construction (explicit; the caller registers the graph input) ----
+    /// Register a module with a stable identity and canonical dotted path.
+    /// Returns a ModuleId in registration order (deterministic).
+    pub fn register(&mut self, path: ModulePath, file: Option<FileId>) -> ModuleId;
+
+    /// Record one import edge discovered for `from` (declaration order).
+    pub fn record_import(&mut self, edge: ImportEdge);
+
+    // ---- enumeration (deterministic; the detector's graph input) ----
+    /// All registered modules in **registration order** (stable, total).
+    pub fn modules(&self) -> &[ModuleId];
+    /// The canonical dotted path of a module.
+    pub fn path_of(&self, module: ModuleId) -> &ModulePath;
+    /// The recorded import edges of a module, in **source (declaration) order**.
+    pub fn imports_of(&self, module: ModuleId) -> &[ImportEdge];
+
+    // ---- lookup (used by lowering and by the detector) ----
     /// Resolve a dotted module path to a known module id, or report it absent.
-    fn resolve(&self, path: &[&str]) -> ModuleLookup;
+    pub fn resolve(&self, path: &[&str]) -> ModuleLookup;
     /// The public-item surface of a known module, when this compilation has it.
-    fn surface(&self, module: ModuleId) -> ModuleSurface;   // Available(..) | Unavailable
+    pub fn surface(&self, module: ModuleId) -> ModuleSurface;   // Available(..) | Unavailable
     /// The package that owns a module (orphan-rule domain; P2D-B14).
-    fn package_of(&self, module: ModuleId) -> PackageId;
+    pub fn package_of(&self, module: ModuleId) -> PackageId;
 }
 
-pub enum ModuleLookup {
-    Known(ModuleId),        // module registered in this compilation
-    Missing,                // no such module registered
+/// One recorded import edge (the graph's edge type). It is produced by
+/// lowering (real modules) or inserted directly (synthetic test modules).
+pub struct ImportEdge {
+    pub from: ModuleId,        // the importing module (stable identity)
+    pub path: ModulePath,      // the dotted path as written
+    pub span: Span,            // the import declaration's source span
+    pub target: ImportTarget,  // resolution outcome (below)
 }
-pub enum ModuleSurface {
-    Available(ModuleInterface),  // public items are inspectable
-    Unavailable,                 // known module, interface not available here
+
+pub enum ImportTarget {
+    Known(ModuleId),           // resolves to a registered module (an edge in the graph)
+    Unavailable(ModuleId),     // known module, interface not available in this compilation
+    Missing,                   // no such module registered
 }
+
+pub enum ModuleLookup { Known(ModuleId), Missing }
+pub enum ModuleSurface { Available(ModuleInterface), Unavailable }
+
+// Indicative aliases (exact layout is an implementation detail):
+//   ModulePath       = Vec<String>  // canonical dotted path segments
+//   ModuleInterface  = the public-item surface of an Available module
+// `ModuleBinding.path` in `hir-contract.md` §5.1 is the same `Vec<String>`.
 ```
 
-Import edges recorded from a module `M` for each `import p;`:
+**How the cycle detector obtains the complete graph.** The detector takes
+**only** `&ModuleRegistry` and reads the graph from its enumeration
+methods — no other input, no filesystem, no global:
 
-- `M --p--> N` when there exists an import at a source span in `M`
-  (record the import’s `Span` and the resolved node’s `ModuleId`).
-- The graph is over **registered** modules; an import whose path does not
-  resolve (`Missing`) or whose module surface is `Unavailable` is recorded
-  as a **failed edge** carrying its span and is a **fail-closed
-  diagnostic** (`name-resolution-contract.md` §9.3), not a silent binding.
+1. **Modules:** `registry.modules()` returns every registered module in
+   registration order (deterministic, stable).
+2. **Edges:** for each module `m`, `registry.imports_of(m)` returns its
+   recorded `ImportEdge`s in source-declaration order (deterministic).
+3. **Participation:** only `ImportTarget::Known(_)` edges are graph edges;
+   `Missing`/`Unavailable` edges are **failed edges** carrying their spans
+   (reported by `name-resolution-contract.md` §9.3) and are **excluded**
+   from cycle traversal, so no phantom cycle is ever reported through a
+   module that is not part of the compilation.
+4. **Duplicate edges:** repeated `import` of the same target from one
+   module are deduplicated for traversal, but each occurrence keeps its
+   own `span`.
+
+**Who populates the registry.**
+
+- **Synthetic conformance modules (WP-B tests):** the harness calls
+  `register` for each module and `record_import` for each edge directly.
+  This makes `mg-1`…`mg-9` (`conformance-plan.md` §7.3) executable with
+  the specified interface alone, without lowering any source.
+- **A real single-file check:** the CLI `register`s the checked module,
+  `lower` discovers its imports and returns them in `LowerOutput`, and the
+  caller `record_import`s them (or the module is registered with them up
+  front). With one module the graph has no cycle, but the same detector
+  runs unchanged.
 
 This yields a finite, deterministic, in-memory graph that Phase 2 can
-actually build and traverse against synthetic registries — satisfying the
-original’s cyclic-import requirement (SPECIFIED §6) without package
-loading, `xl.toml` parsing, filesystem discovery, or network access.
+actually build and traverse — satisfying the original’s cyclic-import
+requirement (SPECIFIED §6) without package loading, `xl.toml` parsing,
+filesystem discovery, or network access.
 
 ## 3. The complete lowering table
 
@@ -444,14 +513,32 @@ different primitive contract — see `P2D-B10` in the decision packet.
 5. **Determinism tests:** lowering twice yields byte-identical HIR dumps.
 6. **Origin-completeness tests:** every HIR node from an AST node has an
    `AstOrigin`; `Item`/`Expr` nodes record their AST id; statements,
-   patterns, and types record unique `Structural` keys; no two nodes share
-   an origin key (`hir-contract.md` §4/§11).
-7. **Module-graph tests (executable in Phase 2, synthetic registry):**
+   patterns, and types record `Structural` keys; `AstOrigin` may be shared
+   across the many nodes of one expansion, but **no two distinct HIR nodes
+   share an occurrence key** (`HirId` unique; `(AstOrigin, OccurrenceKey)`
+   injective) (`hir-contract.md` §4/§11).
+7. **Synthesized-origin uniqueness tests (deterministic, one per
+   desugaring):** lowering a construct and asserting the
+   `AstOrigin::Synthesized { construct, expansion, occurrence }` records:
+   - **`for`** — a nested `for` and a `for` whose body contains a `?`:
+     the inner expansion has a distinct `expansion`/`occurrence`; every
+     generated node’s `occurrence` is unique within its expansion;
+   - **`?`** — `a?` and `b?` in one body produce distinct constructs, and a
+     `?` inside a desugared `for` body gets `expansion > 0`;
+   - **interpolation** — `"{a}{b}{a}"` and a string with adjacent/empty
+     parts: each `FormatPrim`/`StrConcat` node has a distinct
+     `occurrence`, and identical interpolated text is not collapsed into
+     one origin.
+   Positive assertion: the occurrence-key multiset has no duplicates.
+   Negative assertion: mutating two synthesized nodes to share an
+   occurrence key fails the validator.
+8. **Module-graph tests (executable in Phase 2, synthetic registry):**
    the nine module-graph cases enumerated in `conformance-plan.md` §7.3
    (two-module cycle, three-module cycle, acyclic graph, self-import,
    shared dependencies without cycles, duplicate import edges, missing
    imported modules, deterministic cycle diagnostics, graph-depth/size
-   limits) run against a synthetic `ModuleRegistry`.
+   limits) run against a synthetic `ModuleRegistry` built with `register`
+   and `record_import` alone.
 
 ## 9. Traceability
 
@@ -468,3 +555,6 @@ different primitive contract — see `P2D-B10` in the decision packet.
 | Module registry, import edges, fail-closed imports, executable cycle detection | SPECIFIED §6 Phase 2; Directive 010-R1 §3–§4; `P2D-A5`, `P2D-B7` |
 | Accurate AST→HIR origin; checked ids | Directive 010-R1 §5; `P2D-A2` |
 | `lower(&[Item], FileId, &ModuleRegistry)`; `StageFate` | Directive 010-R1 §7; `P2D-A1` |
+| Registry graph enumeration (`modules`/`imports_of`); complete detector input | Directive 010-R2 §3; `P2D-A5` |
+| Synthesized occurrence identity (`expansion`, `occurrence`) | Directive 010-R2 §4; `P2D-A2` |
+| `DefKind::ModuleBinding` import representation | Directive 010-R2 §5; `P2D-B7` |

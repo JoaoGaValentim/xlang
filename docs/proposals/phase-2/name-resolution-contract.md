@@ -356,19 +356,17 @@ not change the syntax.
   CLI registers **one** module (the checked file) under a synthetic
   `PackageId`; the registry may also be populated with **multiple synthetic
   modules** by the conformance harness (`P2D-A5`).
-- `xl-hir` consumes a **caller-provided, in-memory** registry. The
-  **indicative** interface (see `lowering-contract.md` §2.3 for the
-  authoritative shape):
-
-  ```rust
-  // Indicative interface.
-  pub trait ModuleRegistry {
-      fn resolve(&self, path: &[&str]) -> ModuleLookup;      // Known(ModuleId) | Missing
-      fn surface(&self, module: ModuleId) -> ModuleSurface;  // Available(..) | Unavailable
-      fn package_of(&self, module: ModuleId) -> PackageId;
-  }
-  ```
-
+- `xl-hir` consumes a **caller-provided, in-memory** `ModuleRegistry` (a
+  plain caller-owned value, **never a mutable global**). The authoritative
+  interface is in `lowering-contract.md` §2.3; its shape is:
+  - **Lookup:** `resolve(path) -> ModuleLookup`, `surface(module) ->
+    ModuleSurface`, `package_of(module) -> PackageId`.
+  - **Graph enumeration (the cycle detector’s sole input):**
+    `modules() -> &[ModuleId]` (registration order) and
+    `imports_of(module) -> &[ImportEdge]` (source-declaration order), where
+    an `ImportEdge { from, path, span, target }` records the importing
+    module, the written path, the import’s `Span`, and an `ImportTarget`.
+  - **Construction:** `register(path, file)` and `record_import(edge)`.
   The registry is **explicit, in-memory, and caller-provided**: it
   requires **no** package installation, **no** `xl.toml` parsing, **no**
   implicit filesystem discovery, **no** network access, and **no** Phase 8
@@ -377,9 +375,11 @@ not change the syntax.
   (Phase 8, Category C) — but the registry, the import edges, and the
   cycle detector are **executable now** against synthetic registrations.
 - **Registration contract:** a caller registers a module with a stable
-  dotted path, an optional `FileId`, and (optionally) its public-item
-  surface; each `resolve` is deterministic; `ModuleId`s are stable for the
-  lifetime of the registry; the registry never mutates during `lower`.
+  dotted path and an optional `FileId` and records that module’s import
+  edges; registration and edge order are deterministic; `ModuleId`s are
+  stable for the lifetime of the registry; the registry does not mutate
+  during `lower` (lowering reads it and returns its own edges, which the
+  caller records).
 
 ### 9.3 Phase 2 policy for imports — fail closed (P2D-B7)
 
@@ -433,12 +433,18 @@ The Phase 2 deliverable **requires** cyclic-import detection (SPECIFIED
 §6). Phase 2 therefore ships an executable, deterministic module-graph
 validator, not merely a written algorithm:
 
-- **Graph.** Build the import graph over registered modules from the edges
-  recorded during import registration (`lowering-contract.md` §2.3).
+- **Graph input.** The detector takes **only `&ModuleRegistry`** and reads
+  the graph from its enumeration methods — no other input:
+  - nodes = `registry.modules()` (every registered module, registration
+    order);
+  - edges = `registry.imports_of(m)` for each module `m` (each
+    `ImportEdge`, source-declaration order).
   Nodes are `ModuleId`s; a directed edge `M → N` is created for each
-  `import` in `M` that resolves to `Known(N)`. Duplicate edges (repeated
-  imports of the same module from the same module) are **deduplicated**
-  but each occurrence retains its own span for diagnostics.
+  `ImportEdge` whose `target` is `ImportTarget::Known(N)`. Duplicate edges
+  (repeated imports of the same module from the same module) are
+  **deduplicated** for traversal but each occurrence retains its own span
+  for diagnostics (`lowering-contract.md` §2.3). This is the complete graph
+  input and requires no filesystem, package loading, or global state.
 - **Traversal.** Deterministic depth-first search over edges in **source
   order of import declarations**; tri-color states White/Grey/Black. A
   back-edge to a `Grey` module is a cycle.

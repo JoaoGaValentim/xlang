@@ -282,9 +282,17 @@ future implementation directive:
 
 ### 7.3 Module-graph conformance matrix (executable in Phase 2)
 
-These are **Phase 2 obligations** (Directive 010-R1 §3), run against a
-synthetic in-memory `ModuleRegistry` (`P2D-A5`); no package loading,
-`xl.toml`, filesystem discovery, or network is involved.
+These are **Phase 2 obligations** (Directive 010-R1 §3; Directive 010-R2
+§3), run against a synthetic in-memory `ModuleRegistry` (`P2D-A5`); no
+package loading, `xl.toml`, filesystem discovery, or network is involved.
+Each case is built **with the registry’s own construction interface
+alone**: `registry.register(path, file) -> ModuleId` for each synthetic
+module and `registry.record_import(ImportEdge { from, path, span, target })`
+for each edge (a `target` of `ImportTarget::Known(N)` participates in the
+graph; `Unavailable`/`Missing` are failed edges). The detector reads the
+graph solely from `registry.modules()` and `registry.imports_of(m)`
+(`lowering-contract.md` §2.3), so all nine cases are feasible without
+lowering source.
 
 | ID | Scenario | Expected |
 | --- | --- | --- |

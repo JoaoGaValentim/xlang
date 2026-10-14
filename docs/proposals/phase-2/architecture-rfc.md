@@ -106,28 +106,38 @@ Two new crates join the workspace in Phase 2 implementation directives:
 - All new crates carry `#![forbid(unsafe_code)]` and `#![warn(missing_docs)]`
   like the existing crates (SPECIFIED §4 convention; governance §4).
 
-### 2.2 Crate dependency graph (build/`use` edges — proposed, complete)
+### 2.2 Crate dependency graph (`A ──depends on──▶ B` — proposed, complete)
 
 The **dependency graph** and the **data-flow pipeline** (§3) are separate
 diagrams; edges in one are not edges in the other (Directive 010-R1 §7).
+In this graph **every arrow means “depends on / `use`s”** (source depends
+on target); it is not a call or value flow. Listed as explicit edges so
+the direction is unambiguous:
 
 ```text
-xl-span ──▶ xl-diag ──▶ xl-lexer ──▶ xl-parser
-   │           │                         │
-   ▼           ▼                         ▼
- xl-ast ◀──────┴─────────────── (consumes Item; no xl-parser edge)
-   │
-   ▼
- xl-hir ──▶ xl-types
-   │           │
-   └─────┬─────┘
-         ▼
-      xl-cli  (composes; `xc check`)
-
-Edges are the complete permitted set. `xl-hir` must not depend on
-`xl-parser` (it consumes `xl_ast::Item` values, not token streams);
-`xl-types` must not depend on `xl-lexer`/`xl-parser`.
+xl-cli    ──depends on──▶ xl-hir, xl-types, xl-parser, xl-ast, xl-span, xl-diag
+xl-types  ──depends on──▶ xl-hir, xl-ast, xl-span, xl-diag
+xl-hir    ──depends on──▶ xl-ast, xl-span, xl-diag
+xl-parser ──depends on──▶ xl-lexer, xl-ast, xl-span, xl-diag
+xl-lexer  ──depends on──▶ xl-span, xl-diag
+xl-ast    ──depends on──▶ xl-span
+xl-diag   ──depends on──▶ xl-span
 ```
+
+This is the complete permitted set (governance §6):
+
+- `xl-hir` depends on `xl-ast` and the required foundation crates; it
+  must **not** depend on `xl-parser` (it consumes `xl_ast::Item` values
+  carried by `ParseOutput`, not token streams).
+- `xl-types` depends on `xl-hir` (and `xl-ast`/foundations); it must
+  **not** depend on `xl-lexer`/`xl-parser`.
+- `xl-cli` depends on the relevant pipeline crates and composes them.
+- **Foundation crates never depend on higher stages:** `xl-span`,
+  `xl-diag`, `xl-lexer`, `xl-ast`, and `xl-parser` have no edge to
+  `xl-hir`, `xl-types`, or `xl-cli`.
+- **No dependency cycle is implied:** the relation is a DAG (topological
+  order `xl-span`, `xl-diag`, `xl-lexer`, `xl-ast`, `xl-parser`,
+  `xl-hir`, `xl-types`, `xl-cli`). `xl-span` depends on nothing.
 
 ## 3. Data flow (proposed)
 
