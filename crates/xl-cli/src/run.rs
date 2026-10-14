@@ -88,11 +88,13 @@ pub fn run(args: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) ->
 /// Reads, decodes, and parses one source file, then reports the result.
 ///
 /// Every failure mode is explicit and recoverable: unreadable paths,
-/// invalid UTF-8, byte-empty input (nothing to parse), sources beyond the
-/// `u32` span-addressing limit, and unexpected internal failures all exit
-/// with [`EXIT_OPERATIONAL`]; source diagnostics exit with
-/// [`EXIT_SOURCE_ERRORS`]; a clean parse prints the canonical AST and
-/// exits with [`EXIT_SUCCESS`].
+/// invalid UTF-8, sources beyond the `u32` span-addressing limit, and
+/// unexpected internal failures all exit with [`EXIT_OPERATIONAL`]; source
+/// diagnostics exit with [`EXIT_SOURCE_ERRORS`]; a clean parse prints the
+/// canonical AST and exits with [`EXIT_SUCCESS`]. A byte-empty file is a
+/// valid empty module (`module = { item }`): it parses to zero items with
+/// no diagnostics, prints nothing, and exits with [`EXIT_SUCCESS`], exactly
+/// like whitespace-only or comment-only input.
 fn parse_file(path: &Path, stdout: &mut dyn Write, stderr: &mut dyn Write) -> u8 {
     let display = path.display().to_string();
     // Reject regular files beyond the accepted `u32` span-addressing limit
@@ -123,10 +125,6 @@ fn parse_file(path: &Path, stdout: &mut dyn Write, stderr: &mut dyn Write) -> u8
             return EXIT_OPERATIONAL;
         }
     };
-    if bytes.is_empty() {
-        let _ = writeln!(stderr, "error: source file is empty: '{display}'");
-        return EXIT_OPERATIONAL;
-    }
     let source = match String::from_utf8(bytes) {
         Ok(source) => source,
         Err(error) => {

@@ -161,17 +161,6 @@ fn invalid_utf8_is_an_operational_error() {
 }
 
 #[test]
-fn empty_file_is_an_operational_error() {
-    let (_dir, output) = parse_bytes("empty.x", b"");
-    assert_status(&output, EXIT_OPERATIONAL);
-    assert!(output.stdout.is_empty());
-    assert_eq!(
-        stderr_text(&output),
-        "error: source file is empty: 'empty.x'\n"
-    );
-}
-
-#[test]
 fn directory_input_is_an_operational_error() {
     let dir = TempDir::new();
     std::fs::create_dir(dir.path().join("adir")).expect("create directory input");

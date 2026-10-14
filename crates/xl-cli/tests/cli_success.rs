@@ -124,14 +124,45 @@ fn checked_in_example_file_parses_through_the_cli() {
 }
 
 #[test]
-fn trivia_only_input_parses_to_empty_output() {
-    let (_dir, output) = parse_bytes("trivia.x", b"// only a comment\n/* and another */\n");
+fn zero_byte_input_is_a_valid_empty_module() {
+    let (_dir, output) = parse_bytes("empty.x", b"");
     assert_status(&output, EXIT_SUCCESS);
     assert!(
         output.stdout.is_empty(),
-        "an empty module has no canonical output"
+        "an empty module has no canonical output (zero items)"
     );
-    assert!(output.stderr.is_empty());
+    assert!(
+        output.stderr.is_empty(),
+        "an empty module produces no diagnostics"
+    );
+}
+
+#[test]
+fn whitespace_only_input_is_a_valid_empty_module() {
+    let (_dir, output) = parse_bytes("whitespace.x", b"   \t\n\n  \n");
+    assert_status(&output, EXIT_SUCCESS);
+    assert!(
+        output.stdout.is_empty(),
+        "an empty module has no canonical output (zero items)"
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "an empty module produces no diagnostics"
+    );
+}
+
+#[test]
+fn comment_only_input_is_a_valid_empty_module() {
+    let (_dir, output) = parse_bytes("comments.x", b"// only a comment\n/* and another */\n");
+    assert_status(&output, EXIT_SUCCESS);
+    assert!(
+        output.stdout.is_empty(),
+        "an empty module has no canonical output (zero items)"
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "an empty module produces no diagnostics"
+    );
 }
 
 #[test]

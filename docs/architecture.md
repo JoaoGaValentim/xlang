@@ -177,7 +177,9 @@ and column conventions.
   `xl_diag::render` on stderr (file location, line, column, highlighted
   span, labels), and prints `xl_ast::print_items` output — the accepted
   canonical printer, never a CLI-specific printer — plus one trailing
-  newline on stdout. An empty module (trivia-only source) prints nothing.
+  newline on stdout. A module with zero items — a byte-empty file, a
+  whitespace-only file, or a trivia-only file — is valid under the
+  accepted grammar (`module = { item }`) and prints nothing.
 - The command is syntax-only: it never resolves names, checks types,
   compiles, or executes the program. Undefined names are not Phase 1
   errors. The canonical output is normalized XLANG syntax for the parsed
@@ -188,13 +190,14 @@ and column conventions.
   and nothing on stdout, so a recovered tree is never presented as valid
   source; `2` = usage errors (missing/unknown command, missing or
   excessive arguments, unknown flags), file handling errors (unreadable,
-  missing, invalid UTF-8, byte-empty input, source beyond the `u32`
+  missing, invalid UTF-8, source beyond the `u32`
   span-addressing limit, which is rejected from file metadata before it is
   read), or unexpected internal failures (defensive paths; not reachable
   for parser-produced trees).
-- **CLI policy notes:** a byte-empty input file is rejected as an
-  operational error (exit `2`) because there is nothing to parse; a file
-  containing only trivia is a valid empty module (exit `0`, no output).
+- **CLI policy notes:** a source file is one module; a byte-empty file,
+  like a whitespace-only or trivia-only file, is the valid empty module and
+  succeeds with exit `0`, no diagnostics, and no output (Directive 009-R1
+  conformance fix).
   Any positional argument after `parse` that begins with `-` is treated as
   a flag and rejected (`--help` is accepted only at the top level; use
   `./-name.x` to parse a file whose name begins with `-`). File names are

@@ -63,6 +63,17 @@ criteria have been verified and the project owner has approved advancement
   on `63d2af3` is green on all four jobs (Format, ubuntu, windows, macos).
   Directive 009 did not modify `xl-lexer`, `xl-ast`, or `xl-parser` code,
   so the recorded combined lexer/parser fuzz evidence remains valid.
+- **Phase 1 — EMPTY-FILE CONFORMANCE FIX** (Directive 009-R1): an
+  independent review identified that the CLI rejected byte-empty source
+  files with exit `2` although the accepted grammar defines
+  `module = { item }`, which allows zero items and is already how
+  whitespace-only and comment-only inputs are handled. The CLI now parses
+  a zero-byte file as the valid empty module: exit `0`, no diagnostics, and
+  empty canonical output (zero items), exactly like trivia-only input.
+  Missing, unreadable, directory, invalid UTF-8, `u32`-limit, usage, and
+  source-diagnostic behaviors are unchanged. Tests and documentation were
+  corrected accordingly; `xl-lexer`, `xl-ast`, and `xl-parser` were not
+  modified.
 - **Phase 1 — LEXER/PARSER FUZZING ACCEPTED** (Directive 008): the
   combined `lex_parse` fuzz target completed the specification's one-hour
   criterion on `017962b` — 9,111,364 runs in 3601 s, zero crashes. The
@@ -122,7 +133,7 @@ criteria have been verified and the project owner has approved advancement
 | `xl-lexer` implementation | IMPLEMENTED — INTEGRATED (Directive 006) | `crates/xl-lexer`; merged via PR #3 (merge `9ed50ad`); 104 lexer tests (148 workspace-wide at merge, 0 failed); CI runs 38328242463 (`d2972b8`) and 38328884949 (`d48a622`) green on all four jobs |
 | `xl-ast` implementation | IMPLEMENTED — INTEGRATED (Directive 007) | `crates/xl-ast`; data model + canonical printer + structural validator; 94 AST tests (242 workspace-wide, 0 failed; CI-observed 242); 3 insta snapshots; merged via PR #4 (merge `df9e859`; integration CI run 38407939639, all four jobs green) |
 | `xl-parser` implementation | IMPLEMENTED — INTEGRATED (Directive 008) | `crates/xl-parser`; recursive descent + Pratt expressions, ratified recovery sets, shared `MAX_PARSE_DEPTH = 64`, G-3 generic closing, interpolation integration; 187 parser tests; 4 insta snapshots; spec example parses clean and round-trips; merged via PR #5 (merge `b4a7416`; integration CI run [38469504073](https://github.com/JoaoGaValentim/xlang/actions/runs/38469504073) on the merge commit, all four jobs green) |
-| `xl-cli` (`xc parse`) implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 009) | `crates/xl-cli`; binary `xc`; hand-written argument parsing (no CLI dependency); file loading with recoverable I/O and UTF-8 decoding; `SourceMap` registration; accepted `xl-parser` API; diagnostics via `xl-diag` on stderr; canonical AST via `xl-ast::print_items` on stdout; exit codes `0`/`1`/`2` documented as CLI policy; 48 crate tests (15 unit + 33 end-to-end invoking the real binary); 483 workspace-wide tests, 0 failed locally; conformance fixture for the specification example byte-identical to the parser canonical snapshot; CI run [38484468487](https://github.com/JoaoGaValentim/xlang/actions/runs/38484468487) on `63d2af3` green on all four jobs (Format, ubuntu, windows, macos) |
+| `xl-cli` (`xc parse`) implementation | IMPLEMENTED — PENDING OWNER REVIEW (Directive 009) | `crates/xl-cli`; binary `xc`; hand-written argument parsing (no CLI dependency); file loading with recoverable I/O and UTF-8 decoding; `SourceMap` registration; accepted `xl-parser` API; diagnostics via `xl-diag` on stderr; canonical AST via `xl-ast::print_items` on stdout; exit codes `0`/`1`/`2` documented as CLI policy; 49 crate tests (15 unit + 34 end-to-end invoking the real binary); 484 workspace-wide tests, 0 failed locally; conformance fixture for the specification example byte-identical to the parser canonical snapshot; empty-module conformance corrected under Directive 009-R1 (byte-empty, whitespace-only, and comment-only inputs all parse as the valid empty module); CI run [38484468487](https://github.com/JoaoGaValentim/xlang/actions/runs/38484468487) on `63d2af3` green on all four jobs (Format, ubuntu, windows, macos) |
 | `xl-lexer` fuzz harness (preliminary evidence) | PASS — preliminary only | `fuzz/fuzz_targets/lex_tokens.rs`; 1,848,945 runs in 61 s on the local nightly toolchain, zero crashes and zero artifacts. Superseded by the combined lexer/parser fuzzing row below for acceptance purposes |
 | Combined lexer/parser fuzzing (Phase 1 acceptance criterion: 1 hour without failures) | **PASS** | `fuzz/fuzz_targets/lex_parse.rs` on revision `017962b`: **9,111,364 runs in 3601 s** (average 2,530 exec/s, peak RSS 770 MB, 22,355 corpus units added), zero crashes, zero sanitizer failures, no new artifacts. The two earlier attempts found and fixed real defects before this run: a match-arm diagnostic cascade (`crash-67a0b82e…`) and printer non-idempotence (`crash-206b3a0c…`), both with regression tests |
 | `xl-parser`, `xc parse` | `xl-parser` INTEGRATED (PR #5); `xc parse` IMPLEMENTED — PENDING OWNER REVIEW (Directive 009) | Directive 008 (parser authorized); Directive 009 (CLI authorized) |
@@ -162,9 +173,10 @@ Classification vocabulary: **PASS**, **FAIL**, **NOT VERIFIED**,
   remains a project-owner decision after the CLI Pull Request is merged.
 - CLI exit codes are a documented command contract: `0` success, `1`
   lexical/syntactic source errors, `2` usage/I/O/internal errors (CLI
-  policy; `docs/architecture.md` §3, `xl-cli`). A byte-empty input file is
-  rejected as an operational error; a trivia-only file is a valid empty
-  module and succeeds with no output.
+  policy; `docs/architecture.md` §3, `xl-cli`). A source file is one
+  module: a byte-empty, whitespace-only, or trivia-only file is the valid
+  empty module (`module = { item }`) and succeeds with no output and no
+  diagnostics (Directive 009-R1 conformance fix).
 - Directive 009 modified no `xl-lexer`, `xl-ast`, or `xl-parser` code; the
   combined fuzz evidence on `017962b` therefore remains representative of
   the frontend behavior shipped with the CLI. No new fuzz run was claimed.
