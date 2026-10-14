@@ -174,10 +174,46 @@ Contract properties:
            anchor: AnchorId,          // nearest enclosing id-bearing AST node
            path: Vec<u32>,            // deterministic child-index path from anchor
        },
-       Synthesized { construct: DesugarKind, span: Span }, // desugared
+       Synthesized {                  // desugared nodes (one construct -> many nodes)
+           construct: SynthOrigin,    // identity of the originating construct
+           expansion: ExpansionId,    // which desugaring expansion, if nested
+           occurrence: u32,           // deterministic index within the expansion
+       },
    }
+
+   // Identity of the source construct a desugaring expanded: the desugaring
+   // kind plus the construct's own source identity (never its span).
+   pub struct SynthOrigin { pub kind: DesugarKind, pub source: AstOriginKey }
+   pub enum AstOriginKey { Item(xl_ast::ItemId), Expr(xl_ast::ExprId), Structural { anchor: AnchorId, path: Vec<u32> } }
+   pub struct ExpansionId(u32);       // 0-based, per enclosing expansion, in expansion order
    ```
 
+   - **`AstOrigin` is a reference, not a unique node identity.** Several
+     HIR nodes *legitimately share* an `AstOrigin` — a desugaring is
+     inherently **one-to-many** (one `for`/`?`/interpolated string becomes
+     many HIR nodes), and some syntactic nodes fan out too. So `AstOrigin`
+     answers “which source construct produced this node”, and it is
+     **not** used alone as a unique HIR-node key.
+   - **Unique HIR-node identity.** Every HIR node already has a unique
+     `HirId` (§`HirId` above). Where a *content* key is needed that is
+     independent of allocation order (origin-completeness tests, dedup,
+     diagnostics grouping), the pair `(AstOrigin, OccurrenceKey)` is used,
+     where `OccurrenceKey` is the `Structural { anchor, path }` key for
+     syntactic nodes and `(expansion, occurrence)` for synthesized nodes.
+   - **Synthesized uniqueness.** Two distinct synthesized nodes never share
+     an `(AstOrigin::Synthesized, OccurrenceKey)`:
+     - `construct` identifies the originating source construct (by
+       `SynthOrigin.source`, an `AstOriginKey` — a real id, or a
+       `Structural` key — never a span);
+     - `expansion` distinguishes nested desugarings under one construct
+       (e.g. a `?` inside a `for` body, itself desugared): `0` for the
+       outermost expansion of that construct, incremented per nested
+       expansion, in deterministic expansion order;
+     - `occurrence` is the deterministic 0-based index of the node within
+       its expansion, assigned by the fixed expansion traversal (§4–6 of
+       `lowering-contract.md`).
+     Because each expansion walks its generated nodes in a fixed order, the
+     triple is total and injective over the nodes of that expansion.
    - The `Structural` key is deterministic: an anchor (the nearest
      enclosing `Item`/`Expr`, which does have an AST id) plus the
      child-index path taken by the single lowering traversal. Distinct
@@ -185,25 +221,28 @@ Contract properties:
    - **Spans are never used as identity keys.** Grouping parentheses are
      transparent (amendment B-1) and recovered placeholders are zero-width
      at a deterministic insertion point, so spans are not unique; using
-     them as keys would conflate distinct nodes.
-   - `Origin::Desugared { construct }` remains an internal flag on the HIR
-     node for debug dumps and tests; the richer `AstOrigin::Synthesized`
+     them as keys would conflate distinct nodes. Spans are preserved **for
+     diagnostics only**, not for identity.
+   - `Origin::Desugared { construct: DesugarKind }` remains an internal
+     flag on the HIR node for debug dumps and tests; the `AstOrigin::Synthesized`
      record additionally ties each synthesized node to the originating
-     construct’s span for diagnostics.
+     construct for diagnostics.
 5. **Every HIR node has a span.** For syntactic nodes, the AST span
    verbatim. For desugared/synthesized nodes, the originating construct’s
    span, flagged with `Origin::Desugared { construct: DesugarKind }`
    (`P2D-A2`); the flag is not user-visible.
 
-**Completeness invariant (implementable).** The `AstOriginTable` is total:
-every HIR node produced from exactly one AST node has an `AstOrigin`
-entry, and every AST node reachable from the input items has a
-corresponding entry (the reverse mapping used by completeness tests).
-Because grouping is transparent and statements/patterns/types have no AST
-id, completeness is stated over **lowering-traversal visits**, not over
-AST ids: the validator walks the AST and the HIR together and asserts that
-every visited AST node produced exactly one HIR node with a recorded
-origin. Matching tests are listed in §11 and `conformance-plan.md` §7.
+**Completeness invariant (implementable).** The `AstOriginTable` is total
+over **lowering-traversal visits**: every HIR node produced from an AST
+node has an `AstOrigin`, and every AST node reachable from the input items
+has a corresponding entry (the reverse mapping used by completeness tests).
+Completeness is stated over visits, **not** over AST ids and **not** as a
+one-to-one map: desugaring is one-to-many, so the validator asserts that
+every visited AST node produced **at least one** HIR node with a recorded
+origin, and that **no two distinct HIR nodes share an occurrence key**
+(`HirId` is always unique; `(AstOrigin, OccurrenceKey)` is unique by
+construction). Matching tests are listed in §11 and
+`conformance-plan.md` §7.
 
 ## 5. Item, statement, expression, pattern, and type representation
 
@@ -238,6 +277,31 @@ pub enum DefKind {
     Param { ty: TypeRefId, index: u32 },   // function parameters
     Receiver { index: u32 },               // `self`; typed in xl-types from impl/trait context
     Local { mutable: bool, ty: Option<TypeRefId>, body: BodyId },  // let bindings + pattern bindings
+    ModuleBinding(ModuleBinding),          // an `import` binding (see below)
+}
+
+/// A `DefKind::ModuleBinding` payload: the `Def` that an import binding
+/// introduces into the module item namespace (P2D-B7, Directive 010-R2 §5).
+pub struct ModuleBinding {
+    /// The dotted import path as written, e.g. `["std", "io"]`.
+    pub path: Vec<String>,
+    /// The `as` alias, when written (`import std.io as io;`).
+    pub alias: Option<String>,
+    /// The import declaration's source span (primary span for import
+    /// diagnostics; the binding name span is `Def.span`).
+    pub span: Span,
+    /// The resolved target, or why it did not resolve.
+    pub target: ModuleBindingTarget,
+}
+
+pub enum ModuleBindingTarget {
+    /// Resolved to a registered module: a usable binding.
+    Resolved(ModuleId),
+    /// A registered module whose interface this compilation cannot inspect
+    /// (`surface = Unavailable`) — fail closed (P2D-B7).
+    Unavailable(ModuleId),
+    /// No such module registered — fail closed (P2D-B7).
+    Missing,
 }
 ```
 
@@ -253,6 +317,45 @@ pub enum DefKind {
     of identical textual names in different scopes (`P2D-B1`).
   - Visibility is carried as recorded data (the accepted AST shape);
     enforcement semantics are `P2D-B20`.
+- **Import bindings (`DefKind::ModuleBinding`, Directive 010-R2 §5).** An
+  `import` produces exactly one `Def` whose `kind` is
+  `ModuleBinding(ModuleBinding { path, alias, span, target })`:
+  - **Identity.** The binding is a normal `Def` in the single `DefId`
+    space and lives in the **module item namespace** (`P2D-B1`), so it is
+    subject to the same scope and duplicate-definition rules as any item
+    (`name-resolution-contract.md` §7.1): `Def.name` is the binding name
+    and `Def.span` is that name’s span.
+  - **Name ↔ path/alias.** `Def.name` = the `alias` when written, otherwise
+    the **last segment** of `path` (the accepted `import std.io;` binds
+    `io`). `path` is retained verbatim so a diagnostic or the registry can
+    name the full module, and so a later resolution does not re-parse the
+    declaration.
+  - **Associated `ModuleId`.** A **resolved** binding exposes the target
+    module through `ModuleBindingTarget::Resolved(ModuleId)`; the
+    binding’s identity in the registry sense is that `ModuleId`, and any
+    member use it enables resolves to a `GlobalDefId { module, definition }`.
+  - **Missing / unavailable state.** `Missing` and `Unavailable(ModuleId)`
+    are explicit, retained states — **not** silently-dropped bindings —
+    so the fail-closed diagnostics (`P2D-B7`,
+    `diagnostics-contract.md` §5.10) can be emitted at the import’s
+    `span` and at each use, and so `xc check` never certifies them.
+  - **Source span.** `ModuleBinding.span` is the import declaration span
+    (primary for the import-level diagnostic); `Def.span` is the binding
+    name span (primary for a `duplicate definition` on the binding name).
+  - **Resolution behavior.** Lowering resolves `path` against the
+    `ModuleRegistry` at import-registration time
+    (`lowering-contract.md` §1 step 2) and stores the outcome in
+    `target`; the resolver records the `UseId`s of the path segments and
+    the mapping. A member use (`io.println`) through a `Resolved` binding
+    resolves per `name-resolution-contract.md` §6.2/§8; through a
+    `Missing`/`Unavailable` binding it is a fail-closed error.
+  - **Declaration vs. resolved binding.** The **import declaration** is
+    the AST/`ImportDecl` (syntax, always present) and the recorded
+    `ImportEdge` (the graph input, `lowering-contract.md` §2.3). The
+    **resolved module binding** is this `Def` with a `Resolved(ModuleId)`
+    target. They are kept distinct: a declaration exists even when its
+    binding does not resolve, which is precisely what lets the design fail
+    closed rather than fabricate a module.
 - **Definition identity across modules (`P2D-A2`, Directive 010-R1 §6).**
   A `Def` stores an instance-scoped `DefId`; any reference that can cross a
   module boundary is stored as a `GlobalDefId { module, definition }`
@@ -504,9 +607,13 @@ Mirroring `xl-ast`'s validator (accepted Phase 1 design), `xl-hir` ships a
 - resolution table sizes match use/expr counts;
 - `HirModule.module` and `HirModule.package` are set and consistent with
   the registry entry that produced the module (`P2D-A5`);
-- the `AstOriginTable` is total over lowering-traversal visits, and every
+- the `AstOriginTable` is total over lowering-traversal visits; every
   `AstOrigin::Structural` key is well-formed (a valid anchor and a
-  well-ordered child-index path) — no two HIR nodes share an origin key;
+  well-ordered child-index path); every `AstOrigin::Synthesized` has a
+  well-formed `SynthOrigin` and an `occurrence` index within its
+  `expansion` — and **no two distinct HIR nodes share an occurrence key**
+  (`HirId` is unique; `(AstOrigin, OccurrenceKey)` is unique by
+  construction);
 - traversal depth bounded by `MAX_HIR_DEPTH`, node count by
   `MAX_HIR_NODES`, defs by `MAX_DEFS`, uses by `MAX_USES` (`P2D-A7`).
 
@@ -527,9 +634,12 @@ Mirroring `xl-ast`'s validator (accepted Phase 1 design), `xl-hir` ships a
    ids, origins, and diagnostics.
 2. **Origin completeness (implementable):** every HIR node produced from
    an AST node has an `AstOrigin`; nodes with an AST id (`Item`/`Expr`)
-   record it; statements/patterns/types record a unique `Structural` key;
-   no two HIR nodes share an origin key. Tests walk AST and HIR together
-   and assert the traversal-visit bijection (§4).
+   record it; statements/patterns/types record a `Structural` key;
+   synthesized nodes record `Synthesized { construct, expansion,
+   occurrence }`. `AstOrigin` may be **shared** (desugaring is one-to-many),
+   but no two distinct HIR nodes share an **occurrence key**
+   (`(AstOrigin, OccurrenceKey)` is injective; `HirId` is always unique).
+   Tests walk AST and HIR together and assert visit completeness (§4).
 3. Span fidelity: every HIR node's span equals its AST origin, except
    synthesized nodes (flagged; span = originating construct).
 4. No desugared-syntax leakage: typed HIR contains no `For`, `Try`,
@@ -556,6 +666,8 @@ Mirroring `xl-ast`'s validator (accepted Phase 1 design), `xl-hir` ships a
 | Checked id allocation; no saturation/aliasing; `IdSpaceExhausted` | Directive 010-R1 §5 |
 | Cross-module `GlobalDefId`/`ModuleId`/`PackageId` | Directive 010-R1 §6; `P2D-A5` |
 | Module registry, import edges, executable cyclic detection | SPECIFIED §6 Phase 2; Directive 010-R1 §3; `P2D-A5`/`P2D-B7` |
+| Synthesized origin occurrence identity (`expansion`, `occurrence`) | Directive 010-R2 §4; `P2D-A2` |
+| `DefKind::ModuleBinding` import-binding representation | Directive 010-R2 §5; `P2D-B7` |
 | `LocalId` = `DefId` specialization | Directive 010-R1 §5 |
 | Desugaring set (`for`, `?`, interpolation) | SPECIFIED §6 Phase 2 |
 | B-2 literal payload preservation | accepted amendment B-2 |

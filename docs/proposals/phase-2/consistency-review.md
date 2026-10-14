@@ -7,7 +7,8 @@
   consistent”; “Verify each proposed semantic rule is supported by the
   specification or marked as a proposal”; “Verify all new owner decisions
   are explicitly listed”), **amended by Engineering Directive 010-R1 §11**
-  (required design regression audit of the corrected package).
+  and **Engineering Directive 010-R2 §7** (final contract-consistency
+  corrections and their record).
 - **Nature of this document:** an internal editorial audit of the Phase 2
   design package performed before delivery. It records what was checked,
   what was found, and how each finding was disposed of **within the
@@ -126,6 +127,23 @@ No regression finding changed a language-semantics proposal beyond the
 documented scope change in `P2D-B14` (which the owner still decides); all
 corrections remain **PENDING** owner ratification.
 
+## 3.3 Second independent regression audit (Directive 010-R2 §7)
+
+A further independent review found three remaining contract
+inconsistencies and one diagram defect (Directive 010-R2 §1). They are
+recorded here with their resolutions and evidence, in the same style as
+§3.2.
+
+| ID | Finding | Severity | Disposition |
+| --- | --- | --- | --- |
+| S-1 | The `ModuleRegistry` interface exposed lookup/surface/ownership but **not** the registered modules or their import edges, so the cycle detector had no specified way to obtain the complete graph; `mg-1`…`mg-9` feasibility was not demonstrated from the interface alone | Contract gap (implementability) | Fixed: added explicit enumeration — `modules() -> &[ModuleId]` (registration order) and `imports_of(ModuleId) -> &[ImportEdge]` (source order), plus `register`/`record_import` construction and `ImportEdge { from, path, span, target }` with `ImportTarget::{Known, Unavailable, Missing}`. The detector takes **only** `&ModuleRegistry`; `Known` edges participate, `Missing`/`Unavailable` are failed edges excluded from traversal; duplicate edges dedup for traversal but keep spans. Updated in `lowering-contract.md` §2.3/§1, `name-resolution-contract.md` §9.2/§9.4, `conformance-plan.md` §7.3 |
+| S-2 | `AstOrigin::Synthesized { construct, span }` could not uniquely identify the **many** HIR nodes one desugaring produces; using the construct (or span) as identity would alias distinct synthesized nodes | Contract gap (identity) | Fixed: `Synthesized { construct: SynthOrigin, expansion: ExpansionId, occurrence: u32 }`, where `construct` is the desugaring kind + the source construct’s `AstOriginKey` (never a span), `expansion` distinguishes nested desugarings, and `occurrence` is the deterministic index within the expansion. Clarified that `AstOrigin` is a **shared reference** (desugaring is one-to-many) while `HirId`/`(AstOrigin, OccurrenceKey)` is the **unique** node identity. Updated in `hir-contract.md` §4/§9/§11, `lowering-contract.md` §2, with per-desugaring uniqueness tests (§8.7) |
+| S-3 | `lowering-contract.md` referenced `DefKind::ModuleBinding`, but the HIR `DefKind` enum did not define it; the import-binding representation (identity, path/alias, `ModuleId`, missing/unavailable state, span, resolution, scope/duplicate integration) was unspecified | Contract gap (cross-document) | Fixed: added `DefKind::ModuleBinding(ModuleBinding { path, alias, span, target })` with `ModuleBindingTarget::{Resolved(ModuleId), Unavailable(ModuleId), Missing}` and a full specification of binding identity, name↔path/alias, associated `ModuleId`, retained missing/unavailable state, spans, resolution behavior, and the declaration-vs-resolved-binding distinction. Updated in `hir-contract.md` §5.1 |
+| S-4 | The crate dependency diagram used mixed arrow directions (`▶`, `▼`, `◀`) so an arrow did not clearly mean “depends on”; the “no cycle” claim was implicit | Diagram defect | Fixed: the diagram is now explicit “`A ──depends on──▶ B`” edges plus a topological order, separating the dependency graph from the data-flow diagram; foundation crates have no upward edge and the relation is a stated DAG. Updated in `architecture-rfc.md` §2.2 |
+
+No S-finding changes language semantics. S-1…S-4 resolve the four items
+in Directive 010-R2 §3–§6 and introduce no new syntax or semantics.
+
 ## 4. Review notes for the owner
 
 - **Highest-judgment decisions.** The items most likely to deserve close
@@ -153,11 +171,12 @@ corrections remain **PENDING** owner ratification.
 
 ## 5. Status statement
 
-At the time of this review — after the Engineering Directive 010-R1
-independent audit corrections recorded in §3.1/§3.2 — the Phase 2 design
-package is internally consistent, complete against the Directive 010 §14
-file list, free of unresolved editorial defects, satisfies the
-Directive 010-R1 §11 regression points, and contains no
-self-ratification. It remains a proposal: all decisions (`P2D-A1`…`A8`,
+At the time of this review — after the Engineering Directive 010-R1 audit
+corrections (§3.1/§3.2) and the Engineering Directive 010-R2 final
+contract corrections (§3.3) — the Phase 2 design package is internally
+consistent, complete against the Directive 010 §14 file list, free of
+unresolved editorial defects, satisfies the Directive 010-R1 §11
+regression points and the Directive 010-R2 §3–§6 corrections, and contains
+no self-ratification. It remains a proposal: all decisions (`P2D-A1`…`A8`,
 `P2D-B1`…`B20`, `P2D-B22`, `P2D-C1`…`C11`) are PENDING, PD-009 and PD-010
 remain OPEN, no contract is accepted, and no implementation is authorized.
