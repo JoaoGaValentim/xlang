@@ -7,10 +7,18 @@
   design-only package).
 - **Companion documents:** every contract in this directory;
   `decision-packet.md` (`P2D-A7`).
+- **Directive:** Engineering Directive 010 §15 (conformance and test
+  planning), §16 (safety and performance), §17 (quality gates for a
+  design-only package), amended by Engineering Directive 010-R1 §3 (the
+  cyclic-import and module-graph tests are now **Phase 2 obligations**) and
+  §8 (resource-limit fixtures).
 - **No test in this plan can run today:** no `xl-hir`, `xl-types`, or
   `xc check` exists. Every example below is a **future conformance
   fixture** — a documented expectation, not an observed result. No
-  results are claimed.
+  results are claimed. “Executable in Phase 2” denotes a fixture that the
+  future WP-A/WP-B implementation must be able to run **without package
+  loading**, by registering synthetic modules in the in-memory registry
+  (`P2D-A5`); it still cannot run until that implementation exists.
 
 ## 1. Test architecture (future implementation)
 
@@ -47,11 +55,13 @@ tests/compile-fail/<case>.stderr   # the exact rendered diagnostics
   - no environment- or platform-dependent content (no I/O errors, no
     locale, no timing);
   - exit status pinned by the runner (`1` for source errors — §6.1).
-- Cases whose behavior depends on **unavailable infrastructure**
-  (multi-module registry: import cycles, cross-module visibility,
-  orphan-rule cross-module cases) are marked **FUTURE** and are
-  documentation-only until the registry phase; they are listed but not
-  part of any Phase 2 acceptance run.
+- Cases that require the **in-memory `ModuleRegistry`** (import cycles,
+  cross-module visibility, import resolution, orphan-rule package cases)
+  are **Phase 2 obligations**: the future WP-B implementation runs them
+  against **synthetic registered modules** (no filesystem, `xl.toml`, or
+  package loading), so they are part of the Phase 2 acceptance run — not
+  FUTURE. Only cases that need *real* multi-file/package loading (e.g.
+  `xl.toml` discovery) remain FUTURE/Category C.
 - Positive cases use `xc check` expecting exit `0` and empty stderr
   (section 3) plus integration assertions on resolution/type tables and
   HIR snapshots.
@@ -76,7 +86,8 @@ packet rows are cited where behavior depends on a pending decision.
 | nm-ok-4 | prelude use: `let o: Option<i64> = Some(1);` | resolves through prelude; unit variant `None` as a value (`let n: Option<i64> = None;`) |
 | nm-ok-5 | shadowing a prelude constructor with a user item | user definition wins in scope |
 | nm-ok-6 | unit-variant pattern (prelude and user enum) resolves as constructor | pattern classified as variant, not binding |
-| nm-ok-7 | `::` module-relative paths and `.` member access, synthetic registry (FUTURE for real modules) | both resolve to the same public item |
+| nm-ok-7 | `::` module-relative paths and `.` member access through a synthetic registered module (executable in Phase 2; real multi-file loading is FUTURE) | both resolve to the same public item |
+| nm-ok-8 | import of a registered `Available` module whose symbol is public and used | resolves to that item’s `GlobalDefId`; exit 0 |
 
 ### 3.2 Type system
 
@@ -133,9 +144,12 @@ only the first message is described here for brevity.
 | nm-err-5 | `Type::method()` associated-item attempt | `'Point' has no associated items`-class error (path depth rule) |
 | nm-err-6 | enum variant path too deep: `Shape::Circle::Deep` | error at the third segment |
 | nm-err-7 | unknown generic arg arity: `Result<i64>` | `type 'Result' expects 2 generic arguments, found 1` |
-| nm-err-8 | opaque module use: `import std.io; io.println(x);` | `module 'std.io' is not part of this compilation` (`P2D-B7`) |
-| nm-err-9 | private item through the synthetic registry (FUTURE) | `item 'f' is private` |
-| nm-err-10 | cyclic imports (FUTURE, two- and three-module fixtures) | `cyclic module import` + cycle note (`P2D-B7`, §9.4 of the contract) |
+| nm-err-8 | missing import: `import std.io;` with no registered module `std.io` | `cannot resolve import: module 'std.io' is not registered in this compilation` (fail closed, even if unused; `P2D-B7`) |
+| nm-err-8b | unused import of a `Missing` module (`import std.io;` and nothing else) | same fail-closed error — a successful check must not certify an unresolved dependency (`P2D-B7`) |
+| nm-err-8c | known-but-unavailable module import | `cannot check module 'm': its interface is not available in this compilation` (`P2D-B7`) |
+| nm-err-9 | private item through a synthetic registered `Available` module | `item 'f' is private` |
+| nm-err-10 | cyclic imports, synthetic registry: two-module and three-module cycles (executable in Phase 2) | `cyclic module import` + reproducible witness path; see §7.3 |
+| nm-err-11 | known module, symbol absent: `m::missing` where `m` is `Available` | `no item 'missing' in module 'm'` (+ suggestion when close) |
 
 ### 4.2 Types, literals, casts
 
@@ -202,7 +216,8 @@ fixtures above and one dedicated snapshot each:
 | Type mismatch | ty-err-1 | §5.3 |
 | Immutable assignment | flow-err-1 | §5.4 |
 | Missing trait implementation | tr-err-4 | §5.5 |
-| Cyclic import | nm-err-10 (FUTURE) | §5.6 |
+| Cyclic import | nm-err-10 (synthetic registry; §7.3) | §5.6 |
+| Missing/unavailable import (fail closed) | nm-err-8/8b/8c | §5.10 |
 | Non-exhaustive match | pl-err-1 | §5.7 |
 | Unreachable arm | pl-err-4 | §5.8 |
 
@@ -214,17 +229,27 @@ primary span, secondary labels, and a suggestion*; tests: a
 future implementation directive:
 
 1. `xc check` exists and checks single files end-to-end (exit 0/1/2).
-2. The §5 matrix’s eight required diagnostics all render with primary
-   span, secondary label(s), and (where applicable) suggestion, pinned by
-   snapshots.
-3. The `compile-fail/` corpus (this plan’s §4, minus FUTURE entries)
-   passes byte-for-byte, platform-independently.
+2. The §5 matrix’s required diagnostics (including **cyclic import** and
+   **missing/unavailable import**) all render with primary span, secondary
+   label(s), and (where applicable) suggestion, pinned by snapshots.
+3. The `compile-fail/` corpus (this plan’s §4; excluding only fixtures
+   that need *real* multi-file/package loading) passes byte-for-byte,
+   platform-independently.
 4. Positive corpus (§3) checks clean; HIR snapshots stable.
-5. Determinism: repeated runs byte-identical.
-6. No panic/stack overflow on the fuzz obligations (§7).
-7. Phase 1 suites unaffected.
-8. Resource limits produce their fail-closed diagnostics at the exact
-   boundaries.
+5. **The §7.3 module-graph matrix passes against a synthetic
+   `ModuleRegistry`**: real two- and three-module cycle detection with a
+   reproducible witness path; acyclic, self-import, shared-dependency,
+   duplicate-edge, missing-module, determinism, and limit cases (`P2D-A5`,
+   `P2D-B7`).
+6. **Import soundness:** no fixture with a `Missing`/`Unavailable` import
+   exits `0`; `xc check` cannot certify an unresolved dependency.
+7. Origin completeness: every HIR node has an `AstOrigin`; no shared
+   origin keys.
+8. Determinism: repeated runs byte-identical.
+9. No panic/stack overflow on the fuzz obligations (§7.4).
+10. Phase 1 suites unaffected.
+11. Resource limits produce their fail-closed diagnostics at the exact
+    boundaries (HIR, module graph, types, traits, patterns).
 
 ## 7. Structural invariants, security, and performance obligations
 
@@ -233,24 +258,50 @@ future implementation directive:
 - Resolution totality after `check` (`hir-contract.md` §6/§11).
 - No desugared syntax leakage into typed HIR.
 - HIR validator acceptance for all lowering outputs.
+- Origin completeness: every HIR node has an `AstOrigin`; no two nodes
+  share an origin key (`hir-contract.md` §4/§11).
 - Type-table totality: every non-`Error` expression has a type.
 - Deterministic arena/ID allocation orders.
+- Checked allocation: id-space exhaustion yields `IdSpaceExhausted` and a
+  `StageFate::Aborted` result, never a saturated/aliased id (`P2D-A2`).
 
-### 7.2 Safety and performance (Directive 010 §16)
+### 7.2 Safety and performance (Directive 010 §16, Directive 010-R1 §8)
 
 | Risk | Analysis | Bound / mitigation |
 | --- | --- | --- |
+| HIR nesting / expansion | Desugaring can expand shallow source into deeper structures | `MAX_HIR_DEPTH = 256`; `MAX_HIR_NODES = 1_000_000`; `MAX_DEFS`/`MAX_USES`; fail-closed |
 | Recursive type expansion | Source types are depth-bounded (≤ 64 by parser limits); inference can grow types only by instantiations | `MAX_TYPE_DEPTH = 128`; `MAX_INSTANTIATIONS` per body |
 | Occurs-check complexity | Linear in the size of the bound type; no exponential path | `MAX_UNIFY_STEPS`; occurs check before every bind |
 | Trait-resolution recursion | Recursive impls (e.g. `impl<T: Show> Show for Vec<T>`) can chain | `MAX_TRAIT_DEPTH = 32` + goal-stack cycle detection; fail-closed |
-| Cyclic import detection | DFS over modules, O(V+E), deterministic | registry-phase; single-file vacuous |
+| Cyclic import detection | DFS over modules, O(V+E), deterministic; **executable in Phase 2** against synthetic registries | `MAX_MODULE_GRAPH_MODULES`/`_EDGES`/`_DEPTH`; fail-closed; §7.3 |
 | Large symbol tables | O(definitions) maps; no quadratic scans | hashed scopes; interning deferred (`P2D-A4`) |
 | Pattern-matrix explosion | Maranget is exponential in adversarial cases | `MAX_PATTERN_CELLS`; fail-closed error; boundary-fuzzed |
 | Diagnostic cascades | Poisoning stops dependent checks | cascade tests; one-root-cause fixtures |
 | Source-span preservation | Every node/use carries spans; desugared nodes inherit constructs | span-fidelity tests; validator |
 | Malicious source input | Huge files, deep nesting, many literals, pathological matches | Phase 1 limits + Phase 2 budgets; no unbounded recursion anywhere; fuzz the full pipeline |
 
-### 7.3 Fuzzing obligations (future)
+### 7.3 Module-graph conformance matrix (executable in Phase 2)
+
+These are **Phase 2 obligations** (Directive 010-R1 §3), run against a
+synthetic in-memory `ModuleRegistry` (`P2D-A5`); no package loading,
+`xl.toml`, filesystem discovery, or network is involved.
+
+| ID | Scenario | Expected |
+| --- | --- | --- |
+| mg-1 | Two-module import cycle (`a` imports `b`, `b` imports `a`) | one `cyclic module import` with a two-node witness `a → b → a`; deterministic |
+| mg-2 | Three-module import cycle (`a → b → c → a`) | one diagnostic with the three-node witness; cycle reported once |
+| mg-3 | Acyclic module dependency graph (`a → b → c`) | no cycle diagnostic; all modules resolvable |
+| mg-4 | Self-import (`a` imports `a`) | one-node cycle diagnostic |
+| mg-5 | Shared dependencies without a cycle (`a → b`, `a → c`, `b → c`) | no cycle diagnostic |
+| mg-6 | Duplicate import edges (same import twice from one module) | deduplicated; no false cycle; each occurrence keeps its span |
+| mg-7 | Missing imported module | fail-closed import diagnostic (§4.1 nm-err-8); not a phantom cycle; traversal continues |
+| mg-8 | Deterministic cycle diagnostics | repeated runs byte-identical; witness path and spans stable |
+| mg-9 | Graph resource limits | a graph exceeding `MAX_MODULE_GRAPH_MODULES`/`_EDGES`/`_DEPTH` yields exactly the fail-closed resource diagnostic |
+
+These nine cases are the executable demonstration that Phase 2 satisfies
+the original’s cyclic-import requirement.
+
+### 7.4 Fuzzing obligations (future)
 
 - Extend the existing combined harness: a `check` target fuzzing
   `lex → parse → lower → check` over arbitrary bytes, asserting: no
@@ -264,8 +315,11 @@ future implementation directive:
   an implementation directive authorizes WP-A…WP-D.
 - No message string is final; shapes are contract, exact text is pinned
   at implementation.
-- FUTURE fixtures (registry-dependent) are explicitly out of Phase 2
-  acceptance scope.
+- Fixtures needing *real* multi-file/package loading (e.g. `xl.toml`
+  discovery) remain FUTURE and out of Phase 2 acceptance scope; the
+  module-graph fixtures in §7.3 do **not** need it and are in scope.
+- No fixture claims that a standard-library interface, runtime, or
+  Phase 5/6 feature already exists (`architecture-rfc.md` §1).
 
 ## 9. Traceability
 
@@ -274,5 +328,7 @@ future implementation directive:
 | `.x` + `.stderr` test form; diagnostics acceptance | SPECIFIED §6 Phase 2 |
 | Snapshots (insta), properties (proptest), fuzzing | SPECIFIED §9; accepted Phase 1 practice |
 | Positive/negative categories (names, types, traits, mutability, returns, `?`, exhaustiveness) | Directive 010 §15; SPECIFIED §6–§7 |
-| Budgets and fail-closed behavior | Directive 010 §16; `P2D-A7` |
+| Budgets and fail-closed behavior | Directive 010 §16; Directive 010-R1 §8; `P2D-A7` |
+| Module-graph / cyclic-import matrix (§7.3) | Directive 010-R1 §3; SPECIFIED §6 Phase 2; `P2D-A5`, `P2D-B7` |
+| Fail-closed import fixtures | Directive 010-R1 §4; `P2D-B7` |
 | Platform-independent rendering; LF fixtures | accepted Phase 1 CI practice (`architecture.md` §6) |
