@@ -2,12 +2,15 @@
 
 **STATUS: PROPOSED — PENDING OWNER RATIFICATION**
 
-- **Directive:** Engineering Directive 010 §7 (HIR architecture).
+- **Directive:** Engineering Directive 010 §7 (HIR architecture), amended
+  by Engineering Directive 010-R1 §5 (HIR identity and overflow safety)
+  and §6 (cross-module and package identity).
 - **Companion documents:** `architecture-rfc.md` (stage boundaries),
   `lowering-contract.md` (per-node lowering and desugaring),
   `name-resolution-contract.md` (symbol tables and resolution),
   `type-system-contract.md` (typing over this representation),
-  `decision-packet.md` (decisions `P2D-A2`, `P2D-A3`, `P2D-A4`).
+  `decision-packet.md` (decisions `P2D-A1`, `P2D-A2`, `P2D-A3`, `P2D-A4`,
+  `P2D-A5`).
 - **No implementation is authorized.** Sketches below are indicative: the
   exact Rust names and field layout are implementation details for a
   future authorized package, constrained only by the properties marked
@@ -64,6 +67,8 @@ member lookup) are assigned explicitly (§6).
 ```rust
 // Indicative sketch — not an implementation.
 pub struct HirModule {
+    pub module: ModuleId,             // stable identity of this module
+    pub package: PackageId,           // owning package (Phase 2: the synthetic package)
     pub file: xl_span::FileId,
     pub items: Vec<HirItemId>,        // module items, source order
     pub defs: DefTable,               // all definitions
@@ -72,15 +77,26 @@ pub struct HirModule {
     pub stmts: StmtArena,
     pub pats: PatArena,
     pub bodies: BodyTable,            // per-function bodies
-    pub resolutions: Resolutions,     // filled by the resolver; side table
+    pub ast_origin: AstOriginTable,   // HIR node -> its AST source origin
+    pub resolutions: Resolutions,     // syntactic resolutions (side table)
 }
 
 pub enum HirItemKind { Fn, Struct, Enum, Trait, Impl, Import }
+
+// Module and package identity (P2D-A5; Directive 010-R1 §6). `ModuleId` is
+// stable within one compilation and carries (or is looked up alongside)
+// its `PackageId`; a `GlobalDefId` names a definition across modules.
+pub struct ModuleId(u32);
+pub struct PackageId(u32);
+pub struct GlobalDefId { pub module: ModuleId, pub definition: DefId }
 ```
 
 - One `HirModule` corresponds to one parsed file: **1 `.x` file = 1
-  module** (SPECIFIED §2). Package-level multi-module compilation is
-  FUTURE (`P2D-B7`).
+  module** (SPECIFIED §2). In Phase 2 the CLI registers **one** `HirModule`
+  into the module registry under a synthetic single `PackageId`; genuine
+  multi-file/package compilation is FUTURE (`P2D-A5`/`P2D-B7`, Category
+  C1), but the identity types above are fixed now so the registry, the
+  import edges, and the cycle-detection harness are executable today.
 - `Impl` items remain items (they declare methods, not a named type);
   their methods are definitions owned by the impl, associated with a
   *self type use* (resolved in WP-C; inherent vs trait impl recorded from
@@ -96,11 +112,26 @@ pub enum HirItemKind { Fn, Struct, Enum, Trait, Impl, Import }
 
 ```rust
 pub struct HirId(u32);    // expression / statement / pattern nodes (one space, kind-tagged)
+pub struct HirItemId(u32);// module/block item slots (index into HirModule.items)
 pub struct DefId(u32);    // named definitions: items, variants, fields,
                           // methods, trait items, generics, params, locals
+pub struct LocalId(u32);  // NOT a separate identity space: a documented
+                          // `DefId` specialization. `DefKind::Local` values
+                          // share the `DefId` space; `LocalId` is a typed
+                          // view/newtype for call sites that want the
+                          // guarantee, not a distinct arena.
 pub struct UseId(u32);    // one per recorded name use (path, type name, pattern path...)
 pub struct BodyId(u32);   // one per function body (and each block scope owner)
+pub struct TypeRefId(u32);// one per syntactic type reference
 ```
+
+`LocalId` vs `DefId`: **`LocalId` is a documented `DefId` specialization**
+(Directive 010-R1 §5), not a separate identity type or arena. A local
+binding is a `Def` with `DefKind::Local` in the single `DefId` space;
+`LocalId` exists only as a typed view where a call site wants the stronger
+guarantee that the id denotes a local. Consequently a `DefId` and a
+`LocalId` can never refer to the same entity under two different numbers:
+there is exactly one numbering.
 
 Contract properties:
 
@@ -109,23 +140,70 @@ Contract properties:
    generics, then signature types (left to right), then the body (lexical
    order); desugared items are allocated at the point of the originating
    construct, in expansion order (`lowering-contract.md` §3).
-2. **Stability scope:** identifiers are stable within one `HirModule`
-   instance. They are *not* globally unique (mirroring the accepted
-   `xl-ast` instance-scoped ids). Cross-module identity is expressed by
-   `DefId` only through the module registry in a future multi-module
-   world (`P2D-B7`); Phase 2 always has exactly one module.
-3. **Overflow:** counters saturate like the accepted parser's
-   (`u32::MAX`); reaching saturation is practically unreachable and, if
-   it ever occurred, would be an internal-error diagnostic path, never a
-   panic (DERIVED from the never-panic convention).
-4. **Mapping tables:** lowering records, for each AST node it visits, the
-   pair `(ExprId/ItemId, HirId)` in a side table; the reverse direction is
-   served by every HIR node's `Span`. Tests use these tables to assert
-   lowering completeness.
+2. **Stability scope and cross-module identity.** Identifiers are stable
+   within one `HirModule` instance. A bare `DefId` is **not** globally
+   unique across modules, so an unqualified `DefId` must never be used to
+   identify a declaration globally. Cross-module references use the
+   composite `GlobalDefId { module: ModuleId, definition: DefId }`
+   (Directive 010-R1 §6). Definitions from different modules therefore
+   cannot alias accidentally. Phase 2 registers a single module, so every
+   `GlobalDefId` has the same `ModuleId`, but the type and the registry
+   seam are fixed now.
+3. **Overflow: checked allocation, never saturation** (Directive 010-R1
+   §5). Counters are **checked**, not saturating:
+   - `allocate()` returns `Result<Id, IdSpaceExhausted>`.
+   - On exhaustion **no id is reused, wrapped, or saturated**; in
+     particular, two distinct entities can never receive the same id.
+   - Exhaustion is a controlled internal error: construction stops safely
+     and the `lower` result is marked `StageFate::Aborted` and is
+     **unusable for a successful semantic validation** (the CLI maps it to
+     a non-zero exit, never `0`). It is never a panic.
+   - This is a correctness property, not a probability argument: the
+     design does not rely on `u32::MAX` being unreachable.
+4. **Accurate source origin (`AstOrigin`), not spans-as-keys.** The
+   accepted AST assigns an id **only** to `Item` (`ItemId`) and `Expr`
+   (`ExprId`) — verified in `crates/xl-ast/src/id.rs` and `ast.rs`;
+   statements, patterns, and types carry **no** AST id. Lowering therefore
+   records, for each HIR node, an `AstOrigin`:
+
+   ```rust
+   pub enum AstOrigin {
+       Item(xl_ast::ItemId),          // node lowered from an Item
+       Expr(xl_ast::ExprId),          // node lowered from an Expr
+       Structural {                   // nodes with no AST id (stmt/pat/type/...)
+           anchor: AnchorId,          // nearest enclosing id-bearing AST node
+           path: Vec<u32>,            // deterministic child-index path from anchor
+       },
+       Synthesized { construct: DesugarKind, span: Span }, // desugared
+   }
+   ```
+
+   - The `Structural` key is deterministic: an anchor (the nearest
+     enclosing `Item`/`Expr`, which does have an AST id) plus the
+     child-index path taken by the single lowering traversal. Distinct
+     syntactic nodes receive distinct keys even when they share a span.
+   - **Spans are never used as identity keys.** Grouping parentheses are
+     transparent (amendment B-1) and recovered placeholders are zero-width
+     at a deterministic insertion point, so spans are not unique; using
+     them as keys would conflate distinct nodes.
+   - `Origin::Desugared { construct }` remains an internal flag on the HIR
+     node for debug dumps and tests; the richer `AstOrigin::Synthesized`
+     record additionally ties each synthesized node to the originating
+     construct’s span for diagnostics.
 5. **Every HIR node has a span.** For syntactic nodes, the AST span
-   verbatim. For desugared/synthesized nodes, the originating construct's
-   span, flagged with `Origin::Desugared { construct: DesugarKind }` for
-   debug dumps and tests (`P2D-A2`); the flag is not user-visible.
+   verbatim. For desugared/synthesized nodes, the originating construct’s
+   span, flagged with `Origin::Desugared { construct: DesugarKind }`
+   (`P2D-A2`); the flag is not user-visible.
+
+**Completeness invariant (implementable).** The `AstOriginTable` is total:
+every HIR node produced from exactly one AST node has an `AstOrigin`
+entry, and every AST node reachable from the input items has a
+corresponding entry (the reverse mapping used by completeness tests).
+Because grouping is transparent and statements/patterns/types have no AST
+id, completeness is stated over **lowering-traversal visits**, not over
+AST ids: the validator walks the AST and the HIR together and asserts that
+every visited AST node produced exactly one HIR node with a recorded
+origin. Matching tests are listed in §11 and `conformance-plan.md` §7.
 
 ## 5. Item, statement, expression, pattern, and type representation
 
@@ -175,6 +253,13 @@ pub enum DefKind {
     of identical textual names in different scopes (`P2D-B1`).
   - Visibility is carried as recorded data (the accepted AST shape);
     enforcement semantics are `P2D-B20`.
+- **Definition identity across modules (`P2D-A2`, Directive 010-R1 §6).**
+  A `Def` stores an instance-scoped `DefId`; any reference that can cross a
+  module boundary is stored as a `GlobalDefId { module, definition }`
+  (`§3`) so that a definition of module A and one of module B never alias.
+  Within the single module of Phase 2, `GlobalDefId { module: this, .. }`
+  is the identity used by the registry and by the trait/orphan checks; the
+  bare `DefId` remains an internal index.
 - `GenericParam` bounds: at most one bound per parameter (the accepted
   grammar has one optional bound; SPECIFIED surface). Multiple bounds per
   parameter are not representable in source and therefore not in HIR.
@@ -334,14 +419,19 @@ amendment B-2): the target-type range check is a Phase 2 obligation
 
 - `HirModule` owns every arena. No node owns another node recursively;
   references are ids. `Clone` is not required; the module is moved by
-  value.
-- **Resolutions are side tables**, not HIR rewrites:
+  value. `HirModule` is **immutable after `lower` returns**; `xl_types`
+  never mutates it (`P2D-A3`).
+- **Resolutions are side tables**, not HIR rewrites, and they are
+  *stage-owned*:
   `Resolutions { use_: Vec<Resolution>, field: Vec<FieldResolution>, ... }`
-  indexed by `UseId`/`HirId`. `xl-hir` fills name resolutions;
-  `xl-types` fills member/method/selection resolutions. This keeps
-  `xl_types::check(&HirModule) -> CheckOutput` a pure function over
-  immutable HIR (multiple checks with different — future — settings stay
-  possible) and keeps HIR dumps stable across stages.
+  indexed by `UseId`/`HirId`. `xl_hir::lower` returns the **syntactic**
+  `Resolutions` in its `LowerOutput`; `xl_types::check(&HirModule,
+  &Resolutions)` receives it and returns its **own** completed
+  `Resolutions` (member/method/selection entries added or updated) in
+  `CheckOutput`. This keeps `check` a pure function over immutable HIR
+  (multiple checks with different — future — settings stay possible) and
+  keeps HIR dumps stable across stages. There is no in-place mutation of a
+  shared table across the stage boundary.
 - `Resolution` is total: `Unresolved { reason }` is an explicit state that
   always has a corresponding diagnostic (WP-B or WP-C emitted it). An
   invariant test asserts: after `check`, every use is either resolved or
@@ -365,13 +455,21 @@ total over them:
    produces no diagnostics. This is the cascade-suppression mechanism
    (`diagnostics-contract.md` §7).
 4. **Completeness invariant:** lowering always produces a `HirModule` that
-   traverses without panics; there is no "failed lowering" return value.
-   Partiality is represented by error nodes, never by absence of
-   structure. (DERIVED from the never-panic convention and from the
-   accepted parser's "callers always observe a complete tree".)
+   traverses without panics; there is no "failed lowering" return value for
+   *source* errors. Partiality from source errors is represented by error
+   nodes, never by absence of structure. (DERIVED from the never-panic
+   convention and from the accepted parser's "callers always observe a
+   complete tree".)
 5. **Placeholders are never presented as valid:** like the accepted
    tree/printer policy, tests assert that error nodes are flagged and
    cannot silently satisfy resolution or typing.
+6. **The one non-source partial result:** an `IdSpaceExhausted` internal
+   error (§4.3) is *not* a source error and *not* an error node — it is an
+   unrecoverable resource failure. Lowering then returns `StageFate::Aborted`
+   and a `HirModule` that must **not** be used for a successful semantic
+   validation (`architecture-rfc.md` §3; `xc check` exits non-zero). This
+   is the only case in which the "no failed lowering return value" rule is
+   qualified.
 
 ## 8. Boundaries: lowering vs. resolution vs. typing
 
@@ -404,7 +502,13 @@ Mirroring `xl-ast`'s validator (accepted Phase 1 design), `xl-hir` ships a
 - block tail ordering is well-formed; `Break`/`Continue` targets enclose
   the node (structurally);
 - resolution table sizes match use/expr counts;
-- traversal depth bounded by `MAX_HIR_DEPTH` (P2D-A7).
+- `HirModule.module` and `HirModule.package` are set and consistent with
+  the registry entry that produced the module (`P2D-A5`);
+- the `AstOriginTable` is total over lowering-traversal visits, and every
+  `AstOrigin::Structural` key is well-formed (a valid anchor and a
+  well-ordered child-index path) — no two HIR nodes share an origin key;
+- traversal depth bounded by `MAX_HIR_DEPTH`, node count by
+  `MAX_HIR_NODES`, defs by `MAX_DEFS`, uses by `MAX_USES` (`P2D-A7`).
 
 ## 10. Complexity and resource notes
 
@@ -419,10 +523,13 @@ Mirroring `xl-ast`'s validator (accepted Phase 1 design), `xl-hir` ships a
 
 ## 11. Invariants (testable)
 
-1. Determinism: lowering the same `ParseOutput` twice yields identical
-   arenas, ids, and diagnostics.
-2. Completeness: every AST node reachable from `ParseOutput.items` has a
-   recorded `(AST id → HirId)` mapping.
+1. Determinism: lowering the same items twice yields identical arenas,
+   ids, origins, and diagnostics.
+2. **Origin completeness (implementable):** every HIR node produced from
+   an AST node has an `AstOrigin`; nodes with an AST id (`Item`/`Expr`)
+   record it; statements/patterns/types record a unique `Structural` key;
+   no two HIR nodes share an origin key. Tests walk AST and HIR together
+   and assert the traversal-visit bijection (§4).
 3. Span fidelity: every HIR node's span equals its AST origin, except
    synthesized nodes (flagged; span = originating construct).
 4. No desugared-syntax leakage: typed HIR contains no `For`, `Try`,
@@ -431,6 +538,10 @@ Mirroring `xl-ast`'s validator (accepted Phase 1 design), `xl-hir` ships a
 6. Validator acceptance: every module produced by `lower` passes
    `validate`; every module produced by tests that mutates arenas
    illegally fails it (negative tests).
+7. **Checked-allocation safety:** constructing more entities than the
+   `u32` id space allows yields `IdSpaceExhausted` (no reuse, no
+   saturation, no panic) and a `StageFate::Aborted` result that the CLI
+   never reports as a successful check (`P2D-A2`; Directive 010-R1 §5).
 
 ## 12. Traceability
 
@@ -441,6 +552,12 @@ Mirroring `xl-ast`'s validator (accepted Phase 1 design), `xl-hir` ships a
 | Newtype ids + arenas; pure phases; never panic | SPECIFIED §4 conventions |
 | 1 file = 1 module | SPECIFIED §2 |
 | AST input shapes (`Block.tail`, `AssignOp`, `StringLit`, `Param::Receiver`, instance-scoped ids) | accepted `xl-ast` implementation + Phase 1 contracts |
+| AST ids exist only on `Item`/`Expr`; stmt/pat/type origin keys | accepted `xl-ast` (`id.rs`, `ast.rs`) + Directive 010-R1 §5 |
+| Checked id allocation; no saturation/aliasing; `IdSpaceExhausted` | Directive 010-R1 §5 |
+| Cross-module `GlobalDefId`/`ModuleId`/`PackageId` | Directive 010-R1 §6; `P2D-A5` |
+| Module registry, import edges, executable cyclic detection | SPECIFIED §6 Phase 2; Directive 010-R1 §3; `P2D-A5`/`P2D-B7` |
+| `LocalId` = `DefId` specialization | Directive 010-R1 §5 |
 | Desugaring set (`for`, `?`, interpolation) | SPECIFIED §6 Phase 2 |
 | B-2 literal payload preservation | accepted amendment B-2 |
 | Error-tolerant, complete-tree behavior | accepted Phase 1 recovery contract (extended here) |
+| `MAX_HIR_DEPTH`/`MAX_HIR_NODES`/`MAX_DEFS`/`MAX_USES` | `P2D-A7`; Directive 010-R1 §8 |

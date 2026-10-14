@@ -3,7 +3,9 @@
 **STATUS: PROPOSED — PENDING OWNER RATIFICATION**
 
 - **Directive:** Engineering Directive 010 §8 (complete name-resolution
-  architecture).
+  architecture), amended by Engineering Directive 010-R1 §3 (executable
+  module registry and cyclic-import detection) and §4 (import soundness /
+  fail-closed resolution).
 - **Companion documents:** `hir-contract.md` (definitions and uses),
   `lowering-contract.md` (when resolution runs), `type-system-contract.md`
   (type-directed resolution complements this document),
@@ -49,8 +51,10 @@ Consequences:
   mutated, re-keyed, or forgotten (it may still be referenced by uses
   textually before the shadowing declaration).
 - The same rule holds for modules (`P2D-B7`: a module binding resolves to
-  a `ModuleId`, and a member use resolves to a `DefId` in that module —
-  never to a name string).
+  a `ModuleId`, and a member use resolves to a `GlobalDefId` — the
+  composite `{ module, definition }` identity, `hir-contract.md` §3 — never
+  to a name string). A definition of one module can never alias a
+  definition of another.
 - Type parameters are definitions too (`DefId { kind: GenericParam }`),
   so `fn f<T>(x: T)`’s `T` cannot alias a struct `T` declared in the
   module.
@@ -311,11 +315,11 @@ no re-exports, single namespace). What remains:
 
 Resolution is split explicitly into two stages:
 
-1. **WP-B (syntactic):** module bindings and their members; enum variant
-   paths; prelude names; everything above. `Field(base, name)` where
-   `base` is a module binding is resolved here to `ModuleMember(DefId)`.
-   All other `Field` uses stay `FieldSel::Unresolved` with the name use
-   recorded.
+1. **WP-B (syntactic, inside `xl_hir::lower`):** module bindings and their
+   members; enum variant paths; prelude names; everything above.
+   `Field(base, name)` where `base` is a module binding is resolved here to
+   a `ModuleMember` whose identity is a `GlobalDefId`. All other `Field`
+   uses stay `FieldSel::Unresolved` with the name use recorded.
 2. **WP-C (type-directed):** for `Field(base, name)` with a value `base`:
    - compute `base`’s type;
    - if it is a struct: look up the field (fields are public/private per
@@ -344,78 +348,144 @@ Resolution is split explicitly into two stages:
 wildcards, no `::`, no `pub import` (ratified PD-006). This contract does
 not change the syntax.
 
-### 9.2 Module identity and the registry seam
+### 9.2 Module identity and the executable registry
 
-- A module is identified by a `ModuleId`; in Phase 2 (single file), the
-  compilation unit registers exactly one module: the checked file.
-- `xl-hir` consumes a **module resolver** supplied by the caller
-  (`P2D-A5`):
+- A module is identified by a stable `ModuleId`; a `PackageId` groups
+  modules (Directive 010-R1 §6). `GlobalDefId { module, definition }` names
+  a declaration across modules (`hir-contract.md` §3/§4). In Phase 2 the
+  CLI registers **one** module (the checked file) under a synthetic
+  `PackageId`; the registry may also be populated with **multiple synthetic
+  modules** by the conformance harness (`P2D-A5`).
+- `xl-hir` consumes a **caller-provided, in-memory** registry. The
+  **indicative** interface (see `lowering-contract.md` §2.3 for the
+  authoritative shape):
 
   ```rust
-  // Indicative interface
-  pub trait ModuleResolver {
-      fn resolve_module(&self, path: &[&str]) -> ModuleLookup;
-  }
-  pub enum ModuleLookup {
-      Known(ModuleId),      // module exists; its public items are available
-      Unknown,              // no such module in this compilation
+  // Indicative interface.
+  pub trait ModuleRegistry {
+      fn resolve(&self, path: &[&str]) -> ModuleLookup;      // Known(ModuleId) | Missing
+      fn surface(&self, module: ModuleId) -> ModuleSurface;  // Available(..) | Unavailable
+      fn package_of(&self, module: ModuleId) -> PackageId;
   }
   ```
 
-  The CLI’s Phase 2 resolver answers `Unknown` for every import
-  (single-file mode). Multi-file and package loading (file discovery,
-  `xl.toml`, `xl.lock`) are **explicitly out of scope** (Phase 8,
-  Category C) — but the interface is fixed now so the future package
-  model plugs in without redesign.
+  The registry is **explicit, in-memory, and caller-provided**: it
+  requires **no** package installation, **no** `xl.toml` parsing, **no**
+  implicit filesystem discovery, **no** network access, and **no** Phase 8
+  package-management functionality. Multi-file and package loading (file
+  discovery, `xl.toml`, `xl.lock`) remain **explicitly out of scope**
+  (Phase 8, Category C) — but the registry, the import edges, and the
+  cycle detector are **executable now** against synthetic registrations.
+- **Registration contract:** a caller registers a module with a stable
+  dotted path, an optional `FileId`, and (optionally) its public-item
+  surface; each `resolve` is deterministic; `ModuleId`s are stable for the
+  lifetime of the registry; the registry never mutates during `lower`.
 
-### 9.3 Phase 2 policy for imports (P2D-B7)
+### 9.3 Phase 2 policy for imports — fail closed (P2D-B7)
 
-**Opaque-module policy (proposed):**
+Four outcomes are distinguished explicitly (Directive 010-R1 §4):
 
-- Every import binding is created and resolves to `ModuleId::Opaque(path)`.
-- An imported binding that is **never used** produces no diagnostic
-  (no unused-import analysis exists in Phase 2).
-- Any **use through** an opaque module — `io.println`, `io::Reader` in
-  type position — resolves to an `Unresolved` use with the specific
-  diagnostic: `module 'std.io' is not part of this compilation; only
-  single-file checking is available in this phase` (primary at the use,
-  secondary at the import). This keeps files without imports fully
-  checkable and never fabricates a file-discovery convention the
-  specification does not define.
-- Alternatives (packet): (a) hard error at every import site — harsher,
-  rejects checkable parts of real files; (b) implicit sibling-file loading
-  (`import util;` → `util.x`) — invented mapping, rejected (the
-  specification routes module resolution through packages/`xl.toml`);
-  (c) full package loading — explicitly out of scope.
+1. **Resolved imported symbol** — the module is `Known` with
+   `surface = Available`, and the referenced symbol exists and is public:
+   the use resolves to that item’s `GlobalDefId` (or, for a module member,
+   to its `DefId`).
+2. **Known module, symbol absent or not public** — `Known` +
+   `Available`, but the member is missing or private: an ordinary
+   member/visibility error (`no item 'x' in module 'm'` / `item 'f' is
+   private`), as in §8/§10.
+3. **Known module, surface unavailable in this compilation**
+   (`Unavailable`) — a module that exists but whose interface this
+   compilation cannot inspect: **error, fail closed**.
+4. **Missing module** — `resolve` returns `Missing`: **error, fail
+   closed**, at the import site **even when the binding is never used**.
 
-### 9.4 Cyclic imports (algorithm fixed now; enforcement when a registry exists)
+Contract consequences:
 
-The Phase 2 deliverable requires cyclic-import detection (SPECIFIED §6).
-With one file, no cycle is possible, so the algorithm is defined and the
-*obligation* for the registry phase is recorded:
+- **Fail closed.** In strict `xc check`, outcomes 3 and 4 produce an
+  **error** at the import site (primary) with a note at the declaration if
+  known. `xc check` never returns success while an unresolved dependency
+  is present; a successful semantic check must not silently certify an
+  unresolved import (`P2D-B7`; Directive 010-R1 §4).
+- The accepted `import std.io;` remains **syntactically valid** (Phase 1
+  syntax is unchanged). Semantically it is a `Missing` (or `Unavailable`)
+  module in Phase 2, so it is reported until a separately approved
+  external-module contract supplies the standard-library interface. The
+  distinction between *syntax valid* and *semantically resolved* is
+  documented here exactly (Directive 010-R1 §4).
+- **No fabrication.** XLANG never invents a declaration, an item surface,
+  or the existence of an unknown module. Unknown modules are not assumed
+  to exist.
+- **Analysis-only partial mode is not the success contract.** A future
+  mode that checks the known parts of a file and reports unresolved imports
+  without failing (exit `0`) is explicitly **outside** the accepted
+  `xc check` success contract and requires independent owner approval; it
+  must not be the default, and no proposal here authorizes it.
+- Alternatives (packet): (a) silent unused-opaque-import (the *earlier*
+  policy, now **rejected**: it certifies unresolved dependencies); (b)
+  hard error at every import even when a registry could resolve it (too
+  coarse); (c) implicit sibling-file loading (`import util;` → `util.x`,
+  invented mapping, rejected — the specification routes module resolution
+  through packages/`xl.toml`); (d) full package loading — out of scope.
 
-- Build the import graph over `Known` modules only. Deterministic DFS in
-  source order of import declarations; states White/Grey/Black; an edge to
-  a Grey module reports `cyclic module import` with the full cycle path
-  (`a.b → c.d → a.b`) rendered from the DFS stack, primary span at the
-  import that closed the cycle, secondary at the module’s declaration
-  site.
-- Cycles are reported once per cycle, at the closing edge; the modules in
-  the cycle are still checked (no cascade; imports remain bindings).
-- **FUTURE fixtures** (documentation-only in `conformance-plan.md`) cover
-  two- and three-module cycles; they cannot run until the registry phase.
+### 9.4 Cyclic imports — executable in Phase 2 (P2D-A5, P2D-B7)
+
+The Phase 2 deliverable **requires** cyclic-import detection (SPECIFIED
+§6). Phase 2 therefore ships an executable, deterministic module-graph
+validator, not merely a written algorithm:
+
+- **Graph.** Build the import graph over registered modules from the edges
+  recorded during import registration (`lowering-contract.md` §2.3).
+  Nodes are `ModuleId`s; a directed edge `M → N` is created for each
+  `import` in `M` that resolves to `Known(N)`. Duplicate edges (repeated
+  imports of the same module from the same module) are **deduplicated**
+  but each occurrence retains its own span for diagnostics.
+- **Traversal.** Deterministic depth-first search over edges in **source
+  order of import declarations**; tri-color states White/Grey/Black. A
+  back-edge to a `Grey` module is a cycle.
+- **Witness path.** On a back-edge, render the full cycle path from the
+  DFS stack (`a.b → c.d → e.f → a.b`); the path is reproducible because
+  traversal order is fixed.
+- **Diagnostic spans.** **Primary** span: the import that closes the cycle
+  (the back-edge). **Secondary** span(s): each module’s declaration site
+  when known (registry-provided `FileId`/`Span`).
+- **Duplicate-cycle suppression.** Each distinct cycle is reported **once**
+  (keyed by its canonical rotation of module ids); further back-edges into
+  the same cycle are suppressed. Modules in a cycle are still checked (no
+  cascade).
+- **Missing modules.** A `Missing`/`Unavailable` import is a failed edge
+  reported by §9.3; it does **not** contribute to the cycle graph (so the
+  cycle detector never reports a phantom cycle through an unregistered
+  module) and never aborts traversal.
+- **Self-import.** `import m;` inside module `m` (path resolving to itself)
+  is a one-node cycle and is reported by the same algorithm.
+- **Resource limits.** `MAX_MODULE_GRAPH_MODULES`, `MAX_MODULE_GRAPH_EDGES`,
+  and `MAX_MODULE_GRAPH_DEPTH` (`P2D-A7`) bound the graph and the DFS;
+  exceeding one yields a deterministic, fail-closed diagnostic and never a
+  silent pass.
+- **Determinism.** Construction and traversal use ordered vectors and
+  recorded source order; no hash-iteration-order dependence.
+
+The conformance harness registers synthetic modules to exercise two- and
+three-module cycles, acyclic graphs, self-import, shared non-cyclic
+dependencies, duplicate edges, missing modules, deterministic diagnostics,
+and the resource limits — all **executable in Phase 2**
+(`conformance-plan.md` §7.3). This satisfies the original requirement
+without package loading.
 
 ### 9.5 One file = one module and the future package model
 
 - The mapping “module path ↔ source file” is a package-model concern
-  (Phase 8: `xl.toml`); nothing in Phase 2 guesses it. When it arrives,
-  the resolver answers `Known` for registered modules, visibility
+  (Phase 8: `xl.toml`); nothing in Phase 2 guesses it. When it arrives, the
+  same registry interface is populated by the package loader, visibility
   (`P2D-B20`) becomes enforceable across module boundaries with the same
-  diagnostics, and the cycle algorithm above activates unchanged.
+  diagnostics, and the cycle algorithm above runs unchanged.
 - A module’s own items are always visible inside it regardless of `pub`
   (standard visibility rule; SPECIFIED §6 Phase 5 lists modules and `pub`
   as language features to complete — Phase 2 records visibility and
   enforces the boundary as far as the registry allows).
+- The `ModuleId`/`PackageId`/`GlobalDefId` identities (`hir-contract.md`
+  §3) and the orphan-rule domain (`P2D-B14`) are fixed now so the package
+  phase inherits a coherent model.
 
 ## 10. Visibility (P2D-B20)
 
@@ -423,9 +493,11 @@ With one file, no cycle is possible, so the algorithm is defined and the
   `trait`, on struct fields, and on methods inside `impl` blocks.
 - Recorded per definition (`Def.visibility`). Enforcement rule: an item
   (or field) is accessible outside its module only when `pub`. In Phase 2
-  single-module mode the boundary is vacuous for local items; the rule is
-  enforced for opaque-module uses by construction (nothing is accessible
-  through an opaque module) and is ready for the registry phase.
+  single-module mode the boundary is vacuous for local items; for imports
+  the rule is enforced through the registry — a member of an `Available`
+  module is accessible only when `pub`, and a `Missing`/`Unavailable`
+  module fails closed (§9.3), so nothing is spuriously accessible through
+  it.
 - Trait items: signature-only in the accepted grammar (no `pub` allowed
   syntactically); they are **implicitly public** — a trait’s methods are
   its contract (DERIVED from trait purpose; recorded in the packet).
@@ -458,9 +530,13 @@ With one file, no cycle is possible, so the algorithm is defined and the
 - Lookups are O(scope depth) with hash lookups per scope; module-scope
   lookup is one hash lookup after the local chain misses.
 - Path resolution is O(segments); module traversal per registry lookup is
-  O(1) hash lookup in the future package phase.
+  O(1) hash lookup (the registry is in-memory).
+- Import-graph build is O(imports); cycle detection is O(V + E) with the
+  deterministic DFS, bounded by `MAX_MODULE_GRAPH_MODULES` /
+  `MAX_MODULE_GRAPH_EDGES` / `MAX_MODULE_GRAPH_DEPTH` (`P2D-A7`); no
+  unbounded recursion.
 - No unbounded recursion: path/type/pattern walks respect the HIR depth
-  budgets (`P2D-A7`).
+  budgets (`P2D-A7`, incl. `MAX_HIR_DEPTH`).
 
 ## 13. Traceability
 
@@ -475,3 +551,6 @@ With one file, no cycle is possible, so the algorithm is defined and the
 | `Ok`/`Err` unqualified | SPECIFIED §3 example (`parse`) |
 | Suggestions (“você quis dizer foo?”) | SPECIFIED §6 Phase 2 acceptance |
 | Never panic; deterministic output | SPECIFIED §4; INV-007 |
+| Executable in-memory `ModuleRegistry`; `ModuleId`/`PackageId`/`GlobalDefId` | Directive 010-R1 §3/§6; `P2D-A5`, `P2D-A2` |
+| Fail-closed imports (missing/unavailable) | Directive 010-R1 §4; `P2D-B7` |
+| Executable cycle detection: witness path, spans, suppression, limits | Directive 010-R1 §3; SPECIFIED §6 Phase 2; `P2D-B7`, `P2D-A7` |

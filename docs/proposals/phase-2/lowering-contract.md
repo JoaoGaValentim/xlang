@@ -15,13 +15,17 @@
 
 ## 1. Lowering pipeline (order of operations)
 
-Lowering a file proceeds in a fixed, deterministic order:
+Lowering a file (or, in the registry harness, each registered module)
+proceeds in a fixed, deterministic order:
 
 1. **Module scan** — collect module-level items in source order into
    definitions (two-pass: collect names first, then lower bodies, so
    module items are order-independent; `name-resolution-contract.md` §5).
-2. **Import registration** — lower `ImportDecl`s, create module bindings,
-   ask the module registry about each import target (`P2D-B7`).
+2. **Import registration and graph build** — lower `ImportDecl`s, create
+   module bindings, resolve each import target against the caller-provided
+   `ModuleRegistry`, and record the resulting **import edge with its spans**
+   (`P2D-A5`, `P2D-B7`). Missing/unavailable imports are resolved
+   **fail closed** (`name-resolution-contract.md` §9.3).
 3. **Signature lowering** — lower generics, parameters, and return types
    of every function/method/trait item into `TypeRef`s; lower struct
    fields and enum variants/payloads; lower impl headers.
@@ -30,28 +34,47 @@ Lowering a file proceeds in a fixed, deterministic order:
    every name use against the scope tables as it goes (sequential
    visibility for locals; hoisted items per `P2D-B3`, §3.2), and apply the
    three desugarings (§4–6) at the point of the originating construct.
-5. **Validation** — run the structural HIR validator on the result
-   (`hir-contract.md` §9).
+5. **Import-graph validation** — run deterministic cycle detection over the
+   import edges gathered in step 2 (`P2D-A5`, §2.3). When a registry of
+   multiple modules is supplied, this reports real cycles in the source
+   order of import declarations; with the single-module registry it is
+   vacuous.
+6. **Structural validation** — run the structural HIR validator on the
+   result (`hir-contract.md` §9).
 
 Lowering never reorders user code except where a desugaring specifies it;
 diagnostics from all steps are emitted in this order.
 
+`lower` receives `(&[Item], FileId, &ModuleRegistry)` and returns
+`LowerOutput { module, resolutions, diagnostics, fate }`
+(`architecture-rfc.md` §3, `P2D-A1`). It does **not** depend on
+`xl-parser`: it consumes `xl_ast::Item` values. If checked id allocation
+is exhausted, `fate = StageFate::Aborted` and the result is unusable for a
+successful check (`hir-contract.md` §4.3/§7.6).
+
 ## 2. Identity and span rules for lowered nodes
 
 - Every HIR node produced from exactly one AST node inherits its span
-  verbatim.
+  verbatim and records an `AstOrigin` (`hir-contract.md` §4). Nodes lowered
+  from an `Item` or `Expr` record the corresponding `ItemId`/`ExprId`;
+  statements, patterns, types, and other nodes **without** an AST id record
+  an `AstOrigin::Structural { anchor, path }` key. Spans are never used as
+  identity keys (grouping is transparent; recovered placeholders are
+  zero-width and can share a span).
 - **Synthesized nodes** (desugaring temporaries, desugared control flow,
   formatting wrappers) carry the span of the originating construct and an
-  `Origin::Desugared { kind }` flag (`P2D-A2`). Example: every node of the
-  `for` expansion carries the `for` expression's span, so a type error
-  inside the desugared loop still points at the whole `for` statement
-  (and diagnostics inside `BODY` — which has real spans — point at user
-  text, not the expansion).
+  `Origin::Desugared { kind }` flag plus an `AstOrigin::Synthesized`
+  record (`P2D-A2`). Example: every node of the `for` expansion carries the
+  `for` expression's span, so a type error inside the desugared loop still
+  points at the whole `for` statement (and diagnostics inside `BODY` —
+  which has real spans — point at user text, not the expansion).
 - Internal temporaries (`__state`, `__item`, `__next`, `__v`, `__e`) are
-  generated as **fresh `LocalId`s**, never as strings inserted into scopes.
-  They are hygienic by construction: user code cannot name them, shadow
-  them, or observe them (`P2D-A2`; this is why desugaring is specified in
-  HIR, which has identity-based bindings, rather than in the AST).
+  generated as **fresh local definitions** (a `DefId` with
+  `DefKind::Local`, surfaced through the `LocalId` view; `hir-contract.md`
+  §4), never as strings inserted into scopes. They are hygienic by
+  construction: user code cannot name them, shadow them, or observe them
+  (`P2D-A2`; this is why desugaring is specified in HIR, which has
+  identity-based bindings, rather than in the AST).
 - Internal operations (`RangeNew`, `RangeNext`, `StrConcat`,
   `FormatPrim` — `BuiltinCall` nodes) are **compiler-owned built-ins**,
   not resolved through user scopes. The desugared `?` lowering instead
@@ -62,13 +85,54 @@ diagnostics from all steps are emitted in this order.
   lowering in either case, because nothing in the expansion is resolved
   by name (`P2D-B9`).
 
+### 2.3 Module registry and import-graph construction
+
+The registry is supplied by the caller (the CLI owns it; a test supplies a
+synthetic one) — `P2D-A5`. `lower` uses it, never the filesystem. The
+**indicative** interface:
+
+```rust
+// Indicative interface — Caller-provided, in-memory.
+pub trait ModuleRegistry {
+    /// Resolve a dotted module path to a known module id, or report it absent.
+    fn resolve(&self, path: &[&str]) -> ModuleLookup;
+    /// The public-item surface of a known module, when this compilation has it.
+    fn surface(&self, module: ModuleId) -> ModuleSurface;   // Available(..) | Unavailable
+    /// The package that owns a module (orphan-rule domain; P2D-B14).
+    fn package_of(&self, module: ModuleId) -> PackageId;
+}
+
+pub enum ModuleLookup {
+    Known(ModuleId),        // module registered in this compilation
+    Missing,                // no such module registered
+}
+pub enum ModuleSurface {
+    Available(ModuleInterface),  // public items are inspectable
+    Unavailable,                 // known module, interface not available here
+}
+```
+
+Import edges recorded from a module `M` for each `import p;`:
+
+- `M --p--> N` when there exists an import at a source span in `M`
+  (record the import’s `Span` and the resolved node’s `ModuleId`).
+- The graph is over **registered** modules; an import whose path does not
+  resolve (`Missing`) or whose module surface is `Unavailable` is recorded
+  as a **failed edge** carrying its span and is a **fail-closed
+  diagnostic** (`name-resolution-contract.md` §9.3), not a silent binding.
+
+This yields a finite, deterministic, in-memory graph that Phase 2 can
+actually build and traverse against synthetic registries — satisfying the
+original’s cyclic-import requirement (SPECIFIED §6) without package
+loading, `xl.toml` parsing, filesystem discovery, or network access.
+
 ## 3. The complete lowering table
 
 ### 3.1 Items
 
 | AST | HIR result | Notes |
 | --- | --- | --- |
-| `ItemKind::Import(ImportDecl)` | import record + module binding `DefId` (kind `ModuleBinding`) | path segments as uses; alias or last segment binds; `P2D-B6`, `P2D-B7` |
+| `ItemKind::Import(ImportDecl)` | import record + module binding `DefId` (kind `ModuleBinding`) + import edge | path segments as uses; alias or last segment binds; target resolved against the registry; fail-closed on `Missing`/`Unavailable` (`P2D-B6`, `P2D-B7`, §2.3) |
 | `ItemKind::Fn(FnDecl)` | `Def { kind: Fn, generics, sig, body: Some }` | `pub` recorded |
 | `ItemKind::Struct` | `Def { kind: Struct, generics }` + field `Def`s | field `pub` recorded; no constructor syntax exists (G-5 UNRESOLVED) |
 | `ItemKind::Enum` | `Def { kind: Enum, generics }` + variant `Def`s | payload `TypeRef`s; variant order preserved (exhaustiveness rendering order) |
@@ -378,6 +442,16 @@ different primitive contract — see `P2D-B10` in the decision packet.
 4. **Poison tests:** error nodes anywhere in the input produce complete
    HIR with `Error` nodes and no additional lowering diagnostics.
 5. **Determinism tests:** lowering twice yields byte-identical HIR dumps.
+6. **Origin-completeness tests:** every HIR node from an AST node has an
+   `AstOrigin`; `Item`/`Expr` nodes record their AST id; statements,
+   patterns, and types record unique `Structural` keys; no two nodes share
+   an origin key (`hir-contract.md` §4/§11).
+7. **Module-graph tests (executable in Phase 2, synthetic registry):**
+   the nine module-graph cases enumerated in `conformance-plan.md` §7.3
+   (two-module cycle, three-module cycle, acyclic graph, self-import,
+   shared dependencies without cycles, duplicate import edges, missing
+   imported modules, deterministic cycle diagnostics, graph-depth/size
+   limits) run against a synthetic `ModuleRegistry`.
 
 ## 9. Traceability
 
@@ -391,3 +465,6 @@ different primitive contract — see `P2D-B10` in the decision packet.
 | Grouping transparency; target validation at parse time | ratified B-1, PD-003 |
 | Never panic; complete trees; placeholder discipline | SPECIFIED §4; accepted recovery contract |
 | Printer float rule reused for formatting | ratified B-3; parser/AST contract §5(5) |
+| Module registry, import edges, fail-closed imports, executable cycle detection | SPECIFIED §6 Phase 2; Directive 010-R1 §3–§4; `P2D-A5`, `P2D-B7` |
+| Accurate AST→HIR origin; checked ids | Directive 010-R1 §5; `P2D-A2` |
+| `lower(&[Item], FileId, &ModuleRegistry)`; `StageFate` | Directive 010-R1 §7; `P2D-A1` |
