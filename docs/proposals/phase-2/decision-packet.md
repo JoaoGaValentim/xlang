@@ -1,37 +1,45 @@
 # XLANG Phase 2 — Decision Packet
 
-**STATUS: PROPOSED — PENDING OWNER RATIFICATION**
+**STATUS: OWNER-RATIFIED (Directive 010-R3) — PENDING INTEGRATION (PR #7 not merged)**
 
 - **Directive:** Engineering Directive 010 §14 (decision packet),
-  §13 (sequencing), §18 (phase status).
+  §13 (sequencing), §18 (phase status); **ratified by:** Engineering
+  Directive 010-R3 (Phase 2 contract ratification), recorded in §13 of
+  this packet.
 - **Purpose:** the actionable approval list for the Phase 2 design
-  package. Every row is **PENDING**; none of it is ratified, and none of
-  it authorizes implementation.
+  package. **The individual decisions are now owner-ratified** (Directive
+  010-R3, §13): Category A A1–A8 and Category B B1–B20/B22. Category C
+  remains deferred; PD-009 and PD-010 remain OPEN. **Ratification is not
+  integration:** the contracts are binding but not yet merged into `main`
+  until PR #7 is merged and its post-merge CI passes, and ratification
+  does **not** authorize any implementation.
 - **Companion documents:** all files in `docs/proposals/phase-2/`; the
   ratified Phase 1 contracts (`docs/proposals/phase-1/`); the archived
-  original (`docs/spec-v0.1-original.txt`).
+  original (`docs/spec-v0.1-original.txt`); `docs/decisions/adr-0005-phase-2-semantic-architecture.md`.
 
 ## 0. How to read this packet
 
 - **Category A — architecture and implementation recommendations**
   (A1–A8): internal design choices (crates, representations, staging,
   interfaces, budgets, CLI policy, and the interim diagnostic/API
-  policy). They do not change language semantics; they still require
-  owner ratification as the binding Phase 2 contract before any
-  implementation directive.
+  policy). They do not change language semantics. **All eight are
+  owner-ratified by Directive 010-R3** (A1 and A5 with the interface
+  amendment recorded in §4 of that directive and in §13 below).
 - **Category B — language-semantics decisions (B1–B20, B22): each
   requires an explicit owner decision.** A wholesale Category A approval
-  does not cover them. Most fill gaps where the original is silent; two
-  close deferred Phase 1 items (`P2D-B11` for B-2, `P2D-B16` for
-  Category C). `P2D-B21` was reclassified to `P2D-A8` (it holds
-  compatibility/diagnostic policy, not language semantics) and is not a
-  Category B row; see the redirect note after the Category B table.
-- **Category C — deferred items (C1–C11):** listed so the boundary is
-  explicit; no action requested now.
+  does not cover them. **All 21 are individually owner-ratified by
+  Directive 010-R3** (§13 below). Most fill gaps where the original is
+  silent; two close deferred Phase 1 items (`P2D-B11` for B-2,
+  `P2D-B16` for Category C). `P2D-B21` was reclassified to `P2D-A8` (it
+  holds compatibility/diagnostic policy, not language semantics) and is
+  not a Category B row; see the redirect note after the Category B table.
+- **Category C — deferred items (C1–C11):** **remain DEFERRED** (no
+  change); listed so the boundary is explicit.
 
-Nothing in this packet may be treated as accepted until the owner records
-a ratification (the Phase 1 packet is the format precedent). This package
-does **not** approve itself (Directive 010 §18).
+The owner recorded the ratification via Engineering Directive 010-R3;
+the record is §13. **Ratification is not self-approval and not
+integration:** the contracts are binding but not merged into `main` until
+PR #7 is merged with post-merge CI, and no implementation is authorized.
 
 ---
 
@@ -39,11 +47,11 @@ does **not** approve itself (Directive 010 §18).
 
 | ID | Decision | Recommendation | Alternatives considered | Rationale | Risk |
 | --- | --- | --- | --- | --- | --- |
-| **P2D-A1 — Crate topology and stage interface** | Add `xl-hir` and `xl-types`; no `xl-driver` in Phase 2. **One internally consistent interface contract** (Directive 010-R1 §7): `xl_parser::parse_file(&SourceMap, FileId) -> Result<ParseOutput, SpanError>` stays the Phase 1 entry; **lowering receives AST items, not `ParseOutput`** — `xl_hir::lower(&[Item], FileId, &ModuleRegistry) -> LowerOutput { module: HirModule, resolutions: Resolutions, diagnostics, fate: StageFate }` (so `xl-hir` does **not** depend on `xl-parser`); `xl_types::check(&HirModule, &Resolutions) -> CheckOutput { diagnostics, resolutions, fate: StageFate }`. `xl-cli` owns the `SourceMap` and the `ModuleRegistry`, renders `ParseOutput.diagnostics` first, then calls the stages. `lower` owns syntactic name resolution (WP-B is an internal step of `lower`, not a separate entry point); `check` owns type-directed member/method resolution. No stage after the CLI boundary sees `xl-parser` types. | (i) add `xl-driver` now; (ii) one combined `xl-semantics` crate; (iii) `lower` takes `ParseOutput` (rejected: would force `xl-hir → xl-parser`); (iv) differing per-document signatures (rejected: the drift this correction removes) | The original §4 fixes `xl-hir`/`xl-types`; governance §2 forbids speculative infrastructure; one command needs no driver; a single signature set removes the A1/A3 drift | Low: driver can be added in Phase 3 without moving logic if the composition stays thin |
+| **P2D-A1 — Crate topology and stage interface** *(owner: APPROVED WITH AMENDMENT, Directive 010-R3)* | Add `xl-hir` and `xl-types`; no `xl-driver` in Phase 2. **One internally consistent interface contract**: `xl_parser::parse_file(&SourceMap, FileId) -> Result<ParseOutput, SpanError>`; **lowering receives AST items, not `ParseOutput`** — `xl_hir::lower(&[Item], FileId, &ModuleRegistry) -> LowerOutput { module: HirModule, resolutions: Resolutions, import_edges: Vec<ImportEdge>, diagnostics: Vec<Diagnostic>, fate: StageFate }` (so `xl-hir` does **not** depend on `xl-parser`); the module graph is validated by a **separate** entry point `xl_hir::validate_module_graph(&ModuleRegistry) -> Vec<Diagnostic>` invoked by the caller **after** the returned edges are registered; `xl_types::check(&HirModule, &Resolutions) -> CheckOutput { diagnostics, resolutions, fate: StageFate }`. `xl-cli` owns the `SourceMap` and the mutable `ModuleRegistry`, registers modules before lowering, registers `import_edges` after lowering, then runs graph validation, then `check`. `lower` owns syntactic name resolution; `check` owns type-directed member/method resolution. | (i) add `xl-driver` now; (ii) one combined `xl-semantics` crate; (iii) `lower` takes `ParseOutput` (rejected: would force `xl-hir → xl-parser`); (iv) graph validation inside `lower` (rejected, Directive 010-R3 §4: the caller has not yet registered the discovered edges) | The original §4 fixes `xl-hir`/`xl-types`; governance §2 forbids speculative infrastructure; one command needs no driver; a single signature set removes the A1/A3 drift; graph validation must run after edge registration | Low: driver can be added in Phase 3 without moving logic if the composition stays thin |
 | **P2D-A2 — HIR representation, identity, and source origin** | Flat arenas + newtype ids (`HirId`, `DefId`, `UseId`, `BodyId`, `TypeRefId`; `LocalId` is a documented `DefId` specialization, not a separate identity space) with **checked** allocation — ids never saturate, wrap, or alias; `u32` exhaustion is a controlled internal error that leaves the partial result **unusable for a successful check**. Every node has a span. Definitions from different modules cannot alias: composite `GlobalDefId { module: ModuleId, definition: DefId }` (`ModuleId` carries its `PackageId`). Desugared nodes inherit the originating construct’s span, carry an internal `Origin::Desugared` flag, and record an `AstOrigin`. **Source origin is accurate**: nodes that actually have an AST id use it (`ItemId`/`ExprId` — the accepted AST assigns ids only to items and expressions, verified in `xl-ast::id`); statements, patterns, and types (which have **no** AST id) use a deterministic **structural occurrence key** (anchor id + child index path); **synthesized nodes use `Synthesized { construct, expansion, occurrence }`**, a unique occurrence identity because one desugaring produces many nodes. `AstOrigin` is a *shared reference* (desugaring is one-to-many); `HirId`/`(AstOrigin, OccurrenceKey)` is the *unique* node identity. Spans are never used as identity keys (grouping is transparent; recovered placeholders share spans). Non-recursive drop. | (i) recursive `Box` trees like the AST; (ii) `Rc` sharing; (iii) saturating counters (rejected: could give two entities one identity); (iv) spans as keys (rejected: not unique); (v) `Synthesized { construct, span }` alone (rejected: aliases many nodes) | SPECIFIED §4 “newtype IDs; data in arenas/Vec”; instance-scoped AST ids cannot be reused and do not exist for every node kind; desugaring is inherently one-to-many; flat storage removes the deep-drop caveat | Low–Medium: more plumbing; pinned by validator, origin/synthesized-uniqueness tests, and overflow tests |
 | **P2D-A3 — Two-stage resolution (immutable HIR)** | Syntactic resolution (locals, items, paths, variants, prelude, imports/module bindings) is part of `xl_hir::lower`. Type-directed member/method resolution runs in `xl_types::check` and returns its own `Resolutions` side table; `HirModule` is immutable throughout (no HIR rewrite, no interior mutability). `check` is a pure function of `(&HirModule, &Resolutions)`; lexical/syntactic diagnostics stay owned by Phase 1 and are only rendered first; spans travel in nodes and the CLI holds the `SourceMap` for rendering. Poisoned nodes (`Error`) propagate by typing (never by mutation) and suppress cascades. | (i) all resolution in one stage after typing; (ii) resolve members syntactically by name only; (iii) mutate HIR in place (rejected) | Method/field lookup provably needs types; immutable HIR keeps checks pure and MIR-adjacent analysis simple; matches original stage split (resolution+desugar vs type checker) | Medium: the split must be enforced; invariant “every use resolved or explicitly unresolved with a diagnostic” is tested |
 | **P2D-A4 — Symbol strategy** | Owned `String` keys in hashed scopes; **no interning** in Phase 2 | (i) `lasso` interner now; (ii) `Rc<str>` names | The accepted lexer/AST deliberately have no interner; interning is a performance optimization, not semantics, and can arrive later (Phase 9) without API-facing change | Low: performance only; keeps zero new dependencies |
-| **P2D-A5 — Module registry, module identity, and cyclic imports** | A caller-provided, **in-memory** `ModuleRegistry` (owned by the CLI; never a mutable global): stable `ModuleId`s; explicit registration of \*multiple\* modules (dotted path + optional `FileId`); recorded **import edges with spans** (`ImportEdge { from, path, span, target }`, `ImportTarget::{Known, Unavailable, Missing}`); **lookup** (`resolve`/`surface`/`package_of`) **and deterministic graph enumeration** (`modules()`/`imports_of()`, `register`/`record_import`) so the cycle detector reads the complete graph from the registry alone — no filesystem, package loading, or global state; **deterministic cycle detection with a reproducible witness path, primary/secondary spans, duplicate-cycle suppression, safe handling of missing/unavailable modules, and explicit resource limits** — fully executable in Phase 2 against synthetic registries (mg-1…mg-9 feasible with `register`/`record_import` alone). A `PackageId` groups modules; `GlobalDefId` names definitions across modules. No `xl.toml`, filesystem discovery, network, or Phase 8 package loading. | (i) no interface (hardcode single-file); (ii) file-system convention (`import x;` → `x.x`, invented); (iii) postpone cycle detection to a later registry phase (rejected by Directive 010-R1 §3: the original requires it in Phase 2); (iv) lookup-only interface with no graph enumeration (rejected by Directive 010-R2 §3: the detector could not obtain the graph) | The original requires cyclic-import detection and correct import resolution in Phase 2 (§6); a synthetic in-memory registry satisfies it without package loading; the original routes real modules through packages (`xl.toml`, Phase 8) | Low: interface + in-memory graph only; no behavior leaks outside `xl-hir` |
+| **P2D-A5 — Module registry, module identity, and cyclic imports** *(owner: APPROVED WITH AMENDMENT, Directive 010-R3)* | A caller-provided, **in-memory** `ModuleRegistry` (owned by the CLI; never a mutable global): stable `ModuleId`s; explicit registration of \*multiple\* modules (dotted path + optional `FileId`); recorded **import edges with spans** (`ImportEdge { from, path, span, target }`, `ImportTarget::{Known, Unavailable, Missing}`); **lookup** (`resolve`/`surface`/`package_of`) **and deterministic graph enumeration** (`modules()`/`imports_of()`); **construction** (`register`/`record_import`). **Amendment:** `lower` receives the registry **immutably** and **returns** its discovered edges in `LowerOutput.import_edges`; the caller `record_import`s them **after** lowering and only then invokes `validate_module_graph` (`lowering-contract.md` §1.1). No edges discovered during lowering are omitted from cycle detection, and a shared registry is never mutated through an immutable reference. **Deterministic cycle detection with a reproducible witness path, primary/secondary spans, duplicate-cycle suppression, safe handling of missing/unavailable modules, and explicit resource limits** — fully executable in Phase 2 against synthetic registries (mg-1…mg-9 feasible with `register`/`record_import` alone). A `PackageId` groups modules; `GlobalDefId` names definitions across modules. No `xl.toml`, filesystem discovery, network, interior mutability, global state, or Phase 8 package loading. | (i) no interface (hardcode single-file); (ii) file-system convention (`import x;` → `x.x`, invented); (iii) postpone cycle detection to a later registry phase (rejected by Directive 010-R1 §3: the original requires it in Phase 2); (iv) lookup-only interface with no graph enumeration (rejected by Directive 010-R2 §3); (v) graph validation inside `lower` against a mutated shared registry (rejected by Directive 010-R3 §4) | The original requires cyclic-import detection and correct import resolution in Phase 2 (§6); a synthetic in-memory registry satisfies it without package loading; the original routes real modules through packages (`xl.toml`, Phase 8) | Low: interface + in-memory graph only; no behavior leaks outside `xl-hir` |
 | **P2D-A6 — `xc check` CLI contract** | `xc check <file.x>`: run the full pipeline; diagnostics on stderr; **nothing on stdout**; exit `0` no error-level diagnostics and every stage `Complete` / `1` source errors (lexical, syntactic, or semantic, including a resource-budget failure or an unresolved import) / `2` usage/IO/internal (including id-space exhaustion / aborted stage); no new flags | (i) print check summary on stdout; (ii) separate exit code for semantic vs syntactic errors | Mirrors the accepted `xc parse` policy exactly; stdout stays reserved for future structured output decisions; minimal surface | Low: policy only; pinned by CLI tests |
 | **P2D-A7 — Resource budgets and determinism** | Finite, explicit, fail-closed budgets (all deterministic counters; no wall-clock timeouts): **HIR** — `MAX_HIR_DEPTH = 256` (max nested block/expr/pat/type chain; accepted source depth ≤ `MAX_PARSE_DEPTH = 64`; each desugaring adds ≤ 4 levels, so 256 is finite and generous), `MAX_HIR_NODES = 1_000_000`/module (AST→HIR expansion), `MAX_DEFS = 100_000`/module, `MAX_USES = 1_000_000`/module; **module graph** — `MAX_MODULE_GRAPH_MODULES = 1_024`, `MAX_MODULE_GRAPH_EDGES = 16_384`, `MAX_MODULE_GRAPH_DEPTH = 256`; **types** — `MAX_TYPE_DEPTH = 128`, `MAX_UNIFY_STEPS = 100_000`/body, `MAX_INSTANTIATIONS = 10_000`/body, `MAX_TRAIT_DEPTH = 32`, `MAX_PATTERN_CELLS = 250_000`/match. Id space is `u32` with **checked** allocation (`P2D-A2`). Every budget failure is a controlled diagnostic (fail closed); exceeding a source-reachable budget is exit `1`; id-space exhaustion is a controlled internal error (exit `2`); neither ever yields a successful check; no hash-order dependence anywhere. | (i) no caps (trust input size); (ii) warnings instead of errors on exhaustion; (iii) wall-clock timeouts (rejected: non-deterministic); (iv) saturating ids (rejected) | Directive 010 §16 and Directive 010-R1 §8 demand explicit bounds and deterministic counters; a silently unverified exhaustiveness or skipped unification would be unsound; determinism (INV-007) requires counters, not timeouts | Low: values are trivially adjustable later; boundary tests pin behavior |
 | **P2D-A8 — Diagnostic and API policy recommendations (PD-009/PD-010 remain OPEN)** | Interim Phase 2 policy: keep the accepted plain-text canonical `xl_diag::render` (no color, no terminal-width wrapping, no multi-line change); do **not** introduce stable error codes now (reserve the additive `with_code` shape for later); all crates stay internal (`publish = false`); `#[non_exhaustive]` deferred to a stabilization decision; CLI stdout/stderr are test-pinned but **not** external contracts. **Approving A8 ratifies only this interim policy; it does NOT resolve, close, or predetermine PD-009 or PD-010, which remain OPEN owner decisions.** | (i) introduce codes now (changes every snapshot before the owner chooses a taxonomy); (ii) promise external API stability now (premature) | Directive 010 §11/§12 and Directive 010-R1 §10 require reasoned recommendations without silently resolving open decisions; `xl-diag` compatibility is preserved by making nothing mandatory | Low: nothing becomes mandatory; PD-009/PD-010 stay OPEN |
@@ -124,27 +132,70 @@ event per `docs/governance.md` §10).
 
 ## Approval mechanics
 
-- **Category A rows (A1–A8):** approve as proposed / approve with
-  amendment / reject (per row or wholesale). Category A covers internal
-  architecture, interfaces, budgets, CLI policy, and the interim
-  diagnostic/API policy (`P2D-A8`); it does **not** change language
-  semantics.
-- **Category B rows (B1–B20, B22):** **explicit per-row decision
-  required**; a wholesale Category A approval does not cover them.
-  `P2D-B21` is not a Category B row (see its reclassification to
-  `P2D-A8`).
-- **Category C (C1–C11):** no action; recorded boundary only.
-- On approval: this packet gains a ratification record (owner directive
-  reference, date); the corresponding documents change status from
-  PROPOSED to ACCEPTED; any resulting ADR is drafted in a subsequent
-  owner-authorized step (the Phase 1 precedent: proposal set → owner
-  directive → ADR-0004).
+Status: **executed** by Directive 010-R3 (see §13).
+
+- **Category A rows (A1–A8):** approved as proposed, except A1 and A5
+  **approved with the interface amendment** (Directive 010-R3 §4).
+  Category A covers internal architecture, interfaces, budgets, CLI
+  policy, and the interim diagnostic/API policy (`P2D-A8`); it does
+  **not** change language semantics.
+- **Category B rows (B1–B20, B22):** individually approved; a wholesale
+  Category A approval did not cover them. `P2D-B21` is not a Category B
+  row (reclassified to `P2D-A8`).
+- **Category C (C1–C11):** **no action — remains DEFERRED.**
+- **Recorded outcome:** this packet gained the ratification record in §13
+  (owner directive reference, date, revision); the contract documents
+  changed status to **OWNER-RATIFIED — PENDING INTEGRATION**; the ADR is
+  `docs/decisions/adr-0005-phase-2-semantic-architecture.md` (the Phase 1
+  precedent: proposal set → owner directive → ADR-0004).
 - **Implementation remains unauthorized** until a separate directive
-  names a work package (`architecture-rfc.md` §6) and its predecessor
-  gate is satisfied.
+  names a work package (`architecture-rfc.md` §6), its predecessor gate
+  is satisfied, **and** PR #7 is merged with post-merge CI green.
 - This packet does not resolve PD-009 or PD-010; `P2D-A8` (formerly
   `P2D-B21`) records recommendations and an interim policy only, and both
   remain OPEN.
+
+## 13. Ratification record (Directive 010-R3)
+
+- **Authority:** the project owner, via **Engineering Directive 010-R3**
+  (Phase 2 Contract Ratification and Final Integration Gate, 2026-10-14).
+- **Verified revision at ratification:** branch `phase/2-design`,
+  starting head `d2c874b4d36ca88e8aaf2c0f5deb64be605cdc8f`; PR #7 open and
+  unmerged; `docs/spec-v0.1-original.txt` unchanged
+  (SHA-256 `c3c6bce5b3e804b5c6441398e4665ac9271df4f2ca2af262d8019bcb4b343770`).
+- **Category A outcomes (8):**
+
+  | ID | Outcome |
+  | --- | --- |
+  | P2D-A1 | APPROVED WITH AMENDMENT — `LowerOutput` exposes `import_edges`; graph validation is a separate, caller-invoked stage |
+  | P2D-A2 | APPROVED AS PROPOSED — arenas, checked identities, origin mapping |
+  | P2D-A3 | APPROVED AS PROPOSED — immutable HIR and two-stage resolution |
+  | P2D-A4 | APPROVED AS PROPOSED — owned symbol names without interning |
+  | P2D-A5 | APPROVED WITH AMENDMENT — immutable registry input to lowering; explicit edge collection, then graph validation |
+  | P2D-A6 | APPROVED AS PROPOSED — `xc check` exit and diagnostic contract |
+  | P2D-A7 | APPROVED AS PROPOSED — finite deterministic resource budgets |
+  | P2D-A8 | APPROVED AS INTERIM POLICY — PD-009 and PD-010 remain OPEN |
+
+- **Category B outcomes (21, each an independent decision):** B1, B2, B3,
+  B4, B5, B6, B7, B8, B9, B10, B11, B12, B13, B14, B15, B16, B17, B18,
+  B19, B20, B22 — each **APPROVED** exactly as written in this packet.
+  `P2D-B21` remains reclassified to `P2D-A8`.
+- **Technical amendment (Directive 010-R3 §4):** `LowerOutput` carries
+  `import_edges: Vec<ImportEdge>`; the caller registers the returned edges
+  **after** lowering and only then invokes
+  `xl_hir::validate_module_graph(&ModuleRegistry)`. Lowering reads an
+  immutable registry and performs no graph validation
+  (`lowering-contract.md` §1.1–§1.2, `architecture-rfc.md` §3–§4). Purely
+  architectural: no import syntax, visibility, namespace, or other
+  language semantics changed.
+- **Category C:** C1–C11 remain **DEFERRED** (unchanged).
+- **Open decisions:** PD-009 and PD-010 remain **OPEN**.
+- **Ratification vs integration:** this record ratifies the decisions; it
+  does **not** merge PR #7. The design is **owner-ratified but pending
+  integration** until PR #7 is merged and post-merge integration CI
+  passes. Phase 2 implementation is **not** active.
+- **No implementation authorization:** no work package (WP-A…WP-D) is
+  authorized by this ratification (Directive 010-R3 §8).
 
 ## Dependency/ordering note (Directive 010 §13)
 
@@ -164,7 +215,7 @@ review recommended **WP-A (HIR foundation)** as the first work package
 
 | Packet area | Sources |
 | --- | --- |
-| A1–A7 | SPECIFIED §4 conventions/layout; governance §2/§6; Directive 010 §12–§16; Directive 010-R1 §3–§9 |
+| A1–A7 | SPECIFIED §4 conventions/layout; governance §2/§6; Directive 010 §12–§16; Directive 010-R1 §3–§9; Directive 010-R2 §3–§6 (A5); Directive 010-R3 §4 (A1/A5 amendment) |
 | A8 | Directive 010 §11/§12; Directive 010-R1 §10; `docs/pending-decisions.md` PD-009/PD-010 (OPEN) |
 | B1–B7 | SPECIFIED §2/§3/§6 Phase 2; ratified PD-006; Phase 1 corrections; Directive 010-R1 §3–§4 (B7) |
 | B8–B10 | SPECIFIED §6 Phase 2 desugaring mandate; §3 example; ratified PD-004/B-3 |
@@ -172,4 +223,5 @@ review recommended **WP-A (HIR foundation)** as the first work package
 | B14–B15 | SPECIFIED §7; grammar-rfc §3.1; Directive 010-R1 §9 (B14) |
 | B16–B18 | ratified Category C deferral; SPECIFIED §3 type list |
 | B19–B22 | SPECIFIED §6–§7; Directive 010 §10–§11 |
+| §13 ratification | Directive 010-R3 §2–§5; `docs/decisions/adr-0005-phase-2-semantic-architecture.md` |
 | C1–C11 | SPECIFIED §6 phases 5–9; §1 non-goals; ratified Phase 1 Category C |

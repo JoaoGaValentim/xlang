@@ -17,7 +17,7 @@ implementation.
 | --- | --- | --- | --- | --- |
 | 0 | Foundation (*Fundação*) | 1–2 weeks | Workspace, CI, initial specification | ACCEPTED — integrated via PR #1 (merge `4d82106`); see `docs/phase-status.md` |
 | 1 | Lexical and syntactic frontend (*Frontend léxico e sintático*) | 3–4 weeks | `xc parse arquivo.x` prints the AST | ACCEPTED — integrated via PR #6 (merge `210e1e0`); formal acceptance via Directive 010 (2026-10-14); see the closure record in `docs/phase-status.md` |
-| 2 | Name resolution and types (*Resolução de nomes e tipos*) | 6–8 weeks | `xc check` with precise type errors | DESIGN GATE — design package proposed under `docs/proposals/phase-2/`; awaiting owner ratification; implementation not authorized |
+| 2 | Name resolution and types (*Resolução de nomes e tipos*) | 6–8 weeks | `xc check` with precise type errors | DESIGN GATE — design package under `docs/proposals/phase-2/` owner-ratified (Directive 010-R3; ADR-0005), pending integration (PR #7 unmerged); implementation not authorized |
 | 3 | MIR | 3–4 weeks | `xc mir` prints the CFG | NOT STARTED |
 | 4 | Bytecode VM (*VM de bytecode*) | 4–6 weeks | `xc run hello.x` executes programs | NOT STARTED |
 | 5 | Complete language (*Linguagem completa*) | 8–10 weeks | structs, enums, match, traits, generics | NOT STARTED |
@@ -76,11 +76,13 @@ passed on all four jobs. The full closure record is in
 The design package under `docs/proposals/phase-2/` (architecture RFC, HIR,
 lowering/desugaring, name resolution, type system, traits and
 exhaustiveness, diagnostics, conformance plan, decision packet, and
-consistency review) is **proposed and awaiting owner ratification**. The
-package is documentation only: no `xl-hir`, `xl-types`, resolution, type
-checking, or `xc check` implementation exists or is authorized. The
-package's own documents supersede the generic phase description below
-where they are more specific.
+consistency review) is **owner-ratified** by Engineering Directive 010-R3
+(2026-10-14; ADR-0005) and is **pending integration** — PR #7 is open and
+unmerged, so it is not yet part of `main`. The package is documentation
+only: no `xl-hir`, `xl-types`, resolution, type checking, or `xc check`
+implementation exists or is authorized. The package's own documents
+supersede the generic phase description below where they are more
+specific.
 
 Scope and deliverables (original §6):
 

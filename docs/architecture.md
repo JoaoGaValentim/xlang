@@ -21,8 +21,10 @@ the syntax tree with canonical printing and structural validation
 integrated via PR #5), and the command-line interface (`xl-cli`,
 integrated via PR #6; **Phase 1 accepted** under Engineering Directive 010
 on 2026-10-14 — closure record in `docs/phase-status.md`). Phase 2 (name
-resolution and type system) is a **design gate**: the proposed package
-under `docs/proposals/phase-2/` is documentation only and is not ratified.
+resolution and type system) is a **design gate**, **owner-ratified** by
+Engineering Directive 010-R3 (ADR-0005) and **pending integration** (PR #7
+open, unmerged): the package under `docs/proposals/phase-2/` is
+documentation only.
 **No HIR, name resolution, type checking, MIR, bytecode, VM, native code
 generation, standard library, formatter, LSP, or package management code
 exists in this repository.**

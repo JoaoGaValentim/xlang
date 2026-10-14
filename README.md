@@ -22,8 +22,9 @@ its closure record (merge SHA, post-merge CI, acceptance matrix, fuzzing
 evidence, limitations) is in `docs/phase-status.md`.
 
 **Phase 2 — Name resolution and type system: DESIGN GATE.** The design
-package under `docs/proposals/phase-2/` is proposed and awaiting owner
-ratification; no design item is ratified and no implementation is
+package under `docs/proposals/phase-2/` is **owner-ratified** by
+Engineering Directive 010-R3 (2026-10-14; ADR-0005) and is **pending
+integration** — PR #7 is open and unmerged. No implementation is
 authorized.
 
 XLANG is not yet executable and no type checking exists: there is no name

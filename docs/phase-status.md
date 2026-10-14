@@ -3,11 +3,13 @@
 ```text
 CURRENT_PHASE: 2
 PHASE_NAME:    Name Resolution and Type System
-STATUS:        DESIGN GATE — IN PROGRESS
+STATUS:        DESIGN GATE — OWNER-RATIFIED, PENDING INTEGRATION
                Phase 1: ACCEPTED (Engineering Directive 010, 2026-10-14)
-               Phase 2: design package proposed under docs/proposals/phase-2/;
-               awaiting owner ratification. No Phase 2 implementation is
-               authorized (no production code exists beyond Phase 1).
+               Phase 2: design package under docs/proposals/phase-2/ is
+               OWNER-RATIFIED (Engineering Directive 010-R3, 2026-10-14;
+               ADR-0005) but PENDING INTEGRATION into main (PR #7 open,
+               unmerged). No Phase 2 implementation is authorized; no
+               production code exists beyond Phase 1.
 ```
 
 A phase may transition to `APPROVED` only after all required acceptance
@@ -334,10 +336,15 @@ history.
   owner decision. The lexer, AST, parser, and CLI (PR #3, #4, #5, #6) are
   on `main`; `PHASE 1 — ACCEPTED` was recorded 2026-10-14 under Directive
   010 (closure record above).
-- **Phase 2 is a DESIGN GATE.** The proposed design package under
-  `docs/proposals/phase-2/` is documentation only and awaits owner
-  ratification; no `xl-hir`, `xl-types`, resolution, or `xc check`
-  implementation exists or is authorized. The end-user milestone remains
+- **Phase 2 is a DESIGN GATE, now OWNER-RATIFIED.** The design package
+  under `docs/proposals/phase-2/` is documentation only and has been
+  **owner-ratified** by Engineering Directive 010-R3 (2026-10-14;
+  ADR-0005): Category A `P2D-A1`…`A8` and Category B `P2D-B1`…`B20`,
+  `P2D-B22`. Category C remains deferred; PD-009/PD-010 remain open. The
+  design is **pending integration** — PR #7 is open and unmerged, so it is
+  not yet part of `main`. No `xl-hir`, `xl-types`, resolution, or
+  `xc check` implementation exists or is authorized; ratification does not
+  authorize implementation. The end-user milestone remains
   `xc check program.x` (SPECIFIED §6 Phase 2).
 - CLI exit codes are a documented command contract: `0` success, `1`
   lexical/syntactic source errors, `2` usage/I/O/internal errors (CLI
