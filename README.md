@@ -12,13 +12,20 @@ Source → Lexer → Parser → AST → Name Resolution / HIR → Type Checking
 
 ## Status
 
-**Phase 1 — Lexical and syntactic frontend: in progress; `xc parse`
-implemented, pending owner review.** Phase 0 is accepted and integrated.
-The Phase 1 contracts are ratified and the frontend components are on
-`main`: the lexer (`xl-lexer`), the syntax tree with canonical printing and
-structural validation (`xl-ast`), and the syntactic parser (`xl-parser`).
-The user-facing command `xc parse` is implemented in `xl-cli` and pending
-owner review.
+**Phase 1 — Lexical and syntactic frontend: ACCEPTED (Engineering
+Directive 010, 2026-10-14).** Phase 0 is accepted and integrated. The
+Phase 1 contracts are ratified and the frontend components are on `main`:
+the lexer (`xl-lexer`), the syntax tree with canonical printing and
+structural validation (`xl-ast`), the syntactic parser (`xl-parser`), and
+the user-facing command `xc parse` (`xl-cli`). Phase 1 is syntax-only and
+its closure record (merge SHA, post-merge CI, acceptance matrix, fuzzing
+evidence, limitations) is in `docs/phase-status.md`.
+
+**Phase 2 — Name resolution and type system: DESIGN GATE.** The design
+package under `docs/proposals/phase-2/` is **owner-ratified** by
+Engineering Directive 010-R3 (2026-10-14; ADR-0005) and is **pending
+integration** — PR #7 is open and unmerged. No implementation is
+authorized.
 
 XLANG is not yet executable and no type checking exists: there is no name
 resolution, type checker, runtime, standard library, or code generator, and
@@ -40,7 +47,7 @@ What exists today:
 - **`xl-parser`** — recursive-descent and Pratt parser with ratified error
   recovery and bounded recursion.
 - **`xl-cli`** — the `xc` binary; `xc parse <file.x>` prints the canonical
-  AST (implemented, pending owner review).
+  AST.
 - Architecture, governance, and decision documentation under `docs/`,
   including the archived original specification v0.1
   (`docs/spec-v0.1-original.txt`) and its reconciled working record

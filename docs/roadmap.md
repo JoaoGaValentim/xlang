@@ -16,8 +16,8 @@ implementation.
 | Phase | Name | Original estimate | Milestone (original §6) | Status |
 | --- | --- | --- | --- | --- |
 | 0 | Foundation (*Fundação*) | 1–2 weeks | Workspace, CI, initial specification | ACCEPTED — integrated via PR #1 (merge `4d82106`); see `docs/phase-status.md` |
-| 1 | Lexical and syntactic frontend (*Frontend léxico e sintático*) | 3–4 weeks | `xc parse arquivo.x` prints the AST | IN PROGRESS — contracts ratified (Directive 006); lexer, AST, and parser integrated (PR #3–#5); CLI (`xc parse`) implemented, pending owner review (Directive 009) |
-| 2 | Name resolution and types (*Resolução de nomes e tipos*) | 6–8 weeks | `xc check` with precise type errors | NOT STARTED |
+| 1 | Lexical and syntactic frontend (*Frontend léxico e sintático*) | 3–4 weeks | `xc parse arquivo.x` prints the AST | ACCEPTED — integrated via PR #6 (merge `210e1e0`); formal acceptance via Directive 010 (2026-10-14); see the closure record in `docs/phase-status.md` |
+| 2 | Name resolution and types (*Resolução de nomes e tipos*) | 6–8 weeks | `xc check` with precise type errors | DESIGN GATE — design package under `docs/proposals/phase-2/` owner-ratified (Directive 010-R3; ADR-0005), pending integration (PR #7 unmerged); implementation not authorized |
 | 3 | MIR | 3–4 weeks | `xc mir` prints the CFG | NOT STARTED |
 | 4 | Bytecode VM (*VM de bytecode*) | 4–6 weeks | `xc run hello.x` executes programs | NOT STARTED |
 | 5 | Complete language (*Linguagem completa*) | 8–10 weeks | structs, enums, match, traits, generics | NOT STARTED |
@@ -57,18 +57,32 @@ Final state (2026-10-12, Directives 002–004):
 - ADR-0002 (source position conventions): accepted (PD-007 resolved,
   Directive 003).
 
-## Phase 1 — Lexical and syntactic frontend — IN PROGRESS
+## Phase 1 — Lexical and syntactic frontend — ACCEPTED
 
 Contracts ratified (Directive 006; ADR-0004). The lexical frontend
-(`xl-lexer`), the syntax tree (`xl-ast`), and the syntactic parser
-(`xl-parser`) are implemented and integrated (PR #3, PR #4, PR #5). The
-CLI milestone `xc parse` is implemented in `xl-cli` (Directive 009) with
-end-to-end conformance tests, and is pending owner review. The Phase 1
-acceptance evidence is recorded (the complete specification example
-parses and round-trips; 1 hour of combined lexer/parser fuzzing without
-failures); formal acceptance awaits the CLI Pull Request merge and the
-project owner's decision (see the Directive 009 audit in
-`docs/phase-status.md`).
+(`xl-lexer`), the syntax tree (`xl-ast`), the syntactic parser
+(`xl-parser`), and the CLI milestone `xc parse` (`xl-cli`) are implemented
+and integrated (PR #3, PR #4, PR #5, PR #6). The complete specification
+example parses and round-trips through the real binary, and the combined
+lexer/parser fuzzing completed the one-hour criterion with real evidence.
+**PHASE 1 — ACCEPTED** was recorded 2026-10-14 under Engineering Directive
+010 after the owner merged PR #6 (merge `210e1e0`) and the post-merge
+integration CI run [38490165826](https://github.com/JoaoGaValentim/xlang/actions/runs/38490165826)
+passed on all four jobs. The full closure record is in
+`docs/phase-status.md`.
+
+## Phase 2 — Name resolution and type system — DESIGN GATE
+
+The design package under `docs/proposals/phase-2/` (architecture RFC, HIR,
+lowering/desugaring, name resolution, type system, traits and
+exhaustiveness, diagnostics, conformance plan, decision packet, and
+consistency review) is **owner-ratified** by Engineering Directive 010-R3
+(2026-10-14; ADR-0005) and is **pending integration** — PR #7 is open and
+unmerged, so it is not yet part of `main`. The package is documentation
+only: no `xl-hir`, `xl-types`, resolution, type checking, or `xc check`
+implementation exists or is authorized. The package's own documents
+supersede the generic phase description below where they are more
+specific.
 
 Scope and deliverables (original §6):
 

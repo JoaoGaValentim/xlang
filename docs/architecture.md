@@ -19,9 +19,15 @@ Phase 1 implements the lexical frontend (`xl-lexer`, integrated via PR #3),
 the syntax tree with canonical printing and structural validation
 (`xl-ast`, integrated via PR #4), the syntactic parser (`xl-parser`,
 integrated via PR #5), and the command-line interface (`xl-cli`,
-Directive 009, pending owner review). **No HIR, name resolution, type
-checking, MIR, bytecode, VM, native code generation, standard library,
-formatter, LSP, or package management code exists in this repository.**
+integrated via PR #6; **Phase 1 accepted** under Engineering Directive 010
+on 2026-10-14 — closure record in `docs/phase-status.md`). Phase 2 (name
+resolution and type system) is a **design gate**, **owner-ratified** by
+Engineering Directive 010-R3 (ADR-0005) and **pending integration** (PR #7
+open, unmerged): the package under `docs/proposals/phase-2/` is
+documentation only.
+**No HIR, name resolution, type checking, MIR, bytecode, VM, native code
+generation, standard library, formatter, LSP, or package management code
+exists in this repository.**
 
 ```text
 ┌──────────────────────────┐
