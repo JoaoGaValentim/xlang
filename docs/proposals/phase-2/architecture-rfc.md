@@ -11,7 +11,8 @@
 - **Authoritative sources:** `docs/spec-v0.1-original.txt` (v0.1, archived,
   SHA-256 `c3c6bce5…`) §3–§7; accepted ADRs (`docs/decisions/`); the
   ratified Phase 1 contracts (`docs/proposals/phase-1/`); the actual public
-  APIs of the six existing crates.
+  APIs of the six existing crates. This revision incorporates Engineering
+  Directive 010-R1 (independent audit corrections).
 - **Companion documents (this directory):** `hir-contract.md`,
   `lowering-contract.md`, `name-resolution-contract.md`,
   `type-system-contract.md`, `traits-and-exhaustiveness.md`,
@@ -40,10 +41,21 @@ The original specification (§6, Phase 2) fixes the scope:
 - AST → HIR lowering with desugaring (`for` → `loop` + iterator, `?` →
   `match`, string interpolation → concatenation).
 - A symbol table with scopes and modules.
-- Detection of duplicate and undefined names, and of cyclic imports.
+- Detection of duplicate and undefined names, and of **cyclic imports**.
 - The type checker of original §7.
 - Match exhaustiveness checking (Maranget's algorithm).
 - Mutability checking (`let mut`).
+
+**Phase 2 vs Phase 5 boundary (Directive 010-R1 §9).** Phase 2 delivers the
+semantic *infrastructure*: lowering, names, types, generic obligation
+checking, coherence, and diagnostics. It does **not** deliver the full
+Phase 5 language surface (closures, full trait ecosystem, general
+iteration traits, `Display`, associated types, `dyn`/`impl Trait`). The
+minimal internal prelude needed for `Result`/`?` is in scope (`P2D-B4`);
+the standard library, `Display`, and user-visible `Iterator` are not.
+Nothing in this package claims a future runtime or library API already
+exists. The impl-scope split for traits (nominal-head generic impls now,
+unconstrained blanket impls deferred) is in `P2D-B14`.
 
 Milestone (SPECIFIED §6): `xc check program.x` reports precise semantic
 errors. **This milestone is not implemented and is not authorized by this
@@ -70,11 +82,14 @@ Two new crates join the workspace in Phase 2 implementation directives:
 
 | Crate | Responsibility | May depend on |
 | --- | --- | --- |
-| `xl-hir` | AST → HIR lowering; item/definition collection; symbol tables; syntactic name resolution; desugaring (`for`, `?`, interpolation); resolution diagnostics | `xl-ast`, `xl-span`, `xl-diag`, `xl-parser` is **not** a dependency (takes `ParseOutput` values via `xl-ast`) |
+| `xl-hir` | AST → HIR lowering; item/definition collection; symbol tables; syntactic name resolution; the in-memory module registry and cyclic-import detection; desugaring (`for`, `?`, interpolation); resolution diagnostics | `xl-ast`, `xl-span`, `xl-diag`. `xl-parser` is **not** a dependency (it consumes `xl_ast::Item` trees — carried by `ParseOutput` — not token streams) |
 | `xl-types` | Type lowering from HIR type references; inference and unification; literal defaulting; trait checking and solving; mutability checking; pattern checking; exhaustiveness; type diagnostics; final resolutions (fields/methods) | `xl-hir`, `xl-ast` (for operator enums only if kept there), `xl-span`, `xl-diag` |
 
-- `xl-hir → xl-ast → xl-span`; `xl-types → xl-hir`; no cycles; nothing
-  depends on `xl-cli`.
+- Direction (Directive 010-R1 §7): `xl-hir` depends on `xl-ast` and the
+  required foundation crates; `xl-types` depends on `xl-hir` and the
+  required foundation crates; `xl-cli` composes the stages. Foundation
+  crates **never** depend on higher stages; no cycles; nothing depends on
+  `xl-cli`. No circular dependencies are introduced.
 - **No `xl-driver` crate in Phase 2.** The original layout lists
   `xl-driver` as the pipeline orchestrator (SPECIFIED §4, v1.x target).
   Phase 2 has exactly one command (`xc check`), and governance §2 forbids
@@ -83,20 +98,24 @@ Two new crates join the workspace in Phase 2 implementation directives:
   `xl_hir::lower` → `xl_types::check`) directly; when Phase 3 needs a
   second command sharing orchestration, `xl-driver` is introduced under
   that phase's directive. Recorded as decision **P2D-A1** (alternative:
-  introduce `xl-driver` now).
+  introduce `xl-driver` now). `xl-driver` is **not** added merely for
+  architectural decoration.
 - `xl-cli` gains one command implementation and no new dependency. Its
   dependency set becomes `{xl-parser, xl-ast, xl-span, xl-diag} ∪
   {xl-hir, xl-types}` for the `check` path.
 - All new crates carry `#![forbid(unsafe_code)]` and `#![warn(missing_docs)]`
   like the existing crates (SPECIFIED §4 convention; governance §4).
 
-### 2.2 Dependency graph (proposed, complete)
+### 2.2 Crate dependency graph (build/`use` edges — proposed, complete)
+
+The **dependency graph** and the **data-flow pipeline** (§3) are separate
+diagrams; edges in one are not edges in the other (Directive 010-R1 §7).
 
 ```text
 xl-span ──▶ xl-diag ──▶ xl-lexer ──▶ xl-parser
    │           │                         │
    ▼           ▼                         ▼
- xl-ast ◀──────┴─────────────── (ParseOutput)
+ xl-ast ◀──────┴─────────────── (consumes Item; no xl-parser edge)
    │
    ▼
  xl-hir ──▶ xl-types
@@ -106,24 +125,27 @@ xl-span ──▶ xl-diag ──▶ xl-lexer ──▶ xl-parser
       xl-cli  (composes; `xc check`)
 
 Edges are the complete permitted set. `xl-hir` must not depend on
-`xl-parser` (it consumes `xl_ast::Item` trees, not token streams);
+`xl-parser` (it consumes `xl_ast::Item` values, not token streams);
 `xl-types` must not depend on `xl-lexer`/`xl-parser`.
 ```
 
 ## 3. Data flow (proposed)
 
+The **pipeline data flow** — the values passed between stages, owned by
+`xl-cli` — is distinct from the crate dependency graph above:
+
 ```text
 source file
-  │  xl_parser::parse_file           (Phase 1, accepted)
+  │  xl_parser::parse_file(&SourceMap, FileId) -> ParseOutput   (Phase 1, accepted)
   ▼
 ParseOutput { items: Vec<Item>, diagnostics }
-  │  xl_hir::lower(&SourceFile, FileId, &[Item])
+  │  xl_hir::lower(&[Item], FileId, &ModuleRegistry)            ← registry supplied by caller
   ▼
-LowerOutput { module: HirModule, diagnostics }     ← resolution + desugaring
-  │  xl_types::check(&HirModule, &SourceFile)      ← inference, traits, patterns
+LowerOutput { module: HirModule, resolutions, diagnostics, fate } ← syntactic resolution + desugaring
+  │  xl_types::check(&HirModule, &Resolutions)
   ▼
-CheckOutput { diagnostics, resolutions }           ← side tables (fields/methods)
-  │  xl_cli::run_check
+CheckOutput { diagnostics, resolutions, fate }                    ← final fields/methods + types
+  │  xl_cli::run_check (owns SourceMap + ModuleRegistry)
   ▼
 stderr: rendered diagnostics (xl_diag::render) · stdout: empty · exit 0/1/2
 ```
@@ -132,12 +154,16 @@ Stage contracts (all PROPOSED, following the SPECIFIED §4 conventions —
 phases are pure functions, newtype IDs in arenas, every error a
 `Diagnostic` with a `Span`, no panics on user input):
 
-1. `xl_hir::lower` is a pure function of `(ParseOutput, &SourceFile)`.
-   It always returns a complete `HirModule` (partial HIR with error nodes
-   on malformed input), plus diagnostics. It performs no I/O.
-2. `xl_types::check` is a pure function of `(&HirModule, &SourceFile)`
-   and returns diagnostics plus a resolution table. It never mutates the
-   HIR (resolutions live in side tables; see `hir-contract.md` §6).
+1. `xl_hir::lower(&[Item], FileId, &ModuleRegistry)` is a pure function of
+   its inputs (AST items, the file id, and the caller-owned registry). It
+   returns a complete `HirModule` (partial HIR with error nodes on
+   malformed input), the syntactic `Resolutions`, diagnostics, and a
+   `StageFate` (`Complete` or `Aborted`). It performs no I/O.
+2. `xl_types::check(&HirModule, &Resolutions)` is a pure function of the
+   immutable HIR plus the syntactic resolutions and returns diagnostics, a
+   resolution table (with type-directed field/method selections completed),
+   and a `StageFate`. It never mutates the HIR (resolutions live in side
+   tables; see `hir-contract.md` §6).
 3. Both stages are deterministic: identical inputs produce identical
    diagnostics in identical order, with no environment, time, or hash-map
    iteration-order dependence (`architecture.md` §4 INV-007 extended).
@@ -146,10 +172,23 @@ phases are pure functions, newtype IDs in arenas, every error a
    diagnostics, each in deterministic traversal order
    (`diagnostics-contract.md` §3).
 
+**Stage `fate` and the success contract.** `lower` and `check` return a
+`StageFate`. `Complete` means the stage ran to the end of the input within
+its resource budgets. `Aborted { reason }` means a **non-recoverable
+resource failure** occurred (a budget exhaustion that makes the result
+unusable, or `u32` id-space exhaustion, `P2D-A2`/`P2D-A7`); the partial
+`HirModule` in that case must **not** be treated as a successful semantic
+validation. `xc check` treats any `Aborted` stage as an operational failure
+(exit `2`) or a source error (exit `1`) per `P2D-A6`, never exit `0`. The
+only source-reachable budget failure that keeps the pipeline `Complete` is
+one that produces a diagnostic and poisons the affected construct (e.g.
+exhaustiveness budget → error diagnostic, exit `1`); it never certifies
+success.
+
 Input policy: `xl_hir::lower` and `xl_types::check` are only invoked on
-pipeline-consistent input (`ParseOutput` produced from the same source).
-A `ParseOutput` that already has error-level diagnostics is still lowered:
-HIR must be able to represent recovered/placeholder trees
+pipeline-consistent input (`Item`s produced from the same source the
+`FileId` names). A `ParseOutput` that already has error-level diagnostics
+is still lowered: HIR must be able to represent recovered/placeholder trees
 (`hir-contract.md` §7). The CLI invokes `check` regardless and renders
 everything.
 
@@ -160,11 +199,11 @@ everything.
 | Tokenization, syntax trees | `xl-lexer`, `xl-ast`, `xl-parser` (accepted) | Phase 1; spans per ADR-0002 |
 | AST → HIR shape mapping | `xl-hir` lowering | `hir-contract.md`, `lowering-contract.md` |
 | Definition collection (items, variants, fields, methods, params, locals) | `xl-hir` | `DefId`/`LocalId` allocation |
-| Imports registration; module bindings | `xl-hir` | `P2D-B7` |
+| Imports registration; module bindings; import resolution (fail closed) | `xl-hir` | `P2D-B7` |
 | Syntactic name resolution (locals, items, paths, variants, prelude) | `xl-hir` | `name-resolution-contract.md` |
 | Desugaring (`for`, `?`, interpolation) | `xl-hir` | done before typing; `lowering-contract.md` §4–6 |
 | Duplicate/undefined/ambiguous name diagnostics | `xl-hir` | "did you mean" suggestions |
-| Cyclic import detection | `xl-hir` (registry-level) | algorithm defined; vacuous in single-file mode (`P2D-B7`) |
+| Module registry (in-memory) and cyclic-import detection | `xl-hir` | **executable in Phase 2** against a caller-provided synthetic registry (`P2D-A5`, `P2D-B7`); `name-resolution-contract.md` §9.4 |
 | Mutability checking (`let mut`, assignment targets) | `xl-types` | needs types; `type-system-contract.md` §9 |
 | Type lowering (HIR `TypeRef` → `TyId`) | `xl-types` | `type-system-contract.md` §3 |
 | Inference, unification, literal defaulting | `xl-types` | §4–5 |
@@ -189,9 +228,13 @@ The design starts from the actual implementation (verified at
   `ParseOutput { items, diagnostics }` with deterministic
   lexical-then-syntactic order.
 - `xl_ast` nodes carry exact `Span`s and **instance-scoped** `ItemId`/
-  `ExprId` (u32 newtypes, saturating allocation). HIR must therefore mint
-  its own identities and record AST→HIR mapping itself; it cannot use AST
-  ids as global keys (`hir-contract.md` §4).
+  `ExprId` (u32 newtypes, saturating allocation). **Only `Item` and `Expr`
+  carry an id; statements, patterns, and types do not** (verified in
+  `crates/xl-ast/src/id.rs` and `ast.rs`). HIR must therefore mint its own
+  identities and record an accurate AST→HIR origin for every node kind —
+  the existing id where one exists, and a deterministic structural
+  occurrence key otherwise (`hir-contract.md` §4). AST ids cannot be used
+  as global keys.
 - Grouping parentheses are not represented (transparency, amendment B-1);
   recovered nodes are zero-width placeholders; identifiers are plain
   `String`s (no interner, by design).
@@ -227,8 +270,15 @@ directive** (Directive 010 §13; governance §1).
 - Duplicate/undefined/ambiguous diagnostics with suggestions.
 - Visibility recording (enforcement surfaces with the multi-module
   registry; `P2D-B20`).
-- Import-cycle algorithm (obligation carried when a registry exists).
-- Gates: resolution test matrix (positive/negative), suggestion snapshots.
+- **The in-memory `ModuleRegistry` and the executable cyclic-import
+  detection** (`P2D-A5`, `P2D-B7`), demonstrating real cycle detection and
+  fail-closed missing/unavailable-import diagnostics against synthetic
+  registered modules. This is a Phase 2 deliverable, not a FUTURE
+  obligation.
+- Gates: resolution test matrix (positive/negative), a module-graph test
+  matrix (cycles, acyclic graphs, self-import, shared dependencies,
+  duplicate edges, missing modules, determinism, resource limits),
+  suggestion snapshots.
 
 ### WP-C — Type checking
 
@@ -294,13 +344,14 @@ see the assessment note below):
 | Risk | Mitigation |
 | --- | --- |
 | HIR duplicates AST shape and drifts | HIR differences are enumerated and tested by lowering snapshots; validator enforces structural invariants |
-| Member resolution split across stages becomes inconsistent | Single `Resolutions` table updated in place; final-state invariant checks (every use resolved or explicitly `Unresolved` with a diagnostic) |
-| Desugaring loses source quality of diagnostics | Synthesized nodes carry originating spans (`P2D-A2`); diagnostics for desugared failures report the construct, not the expansion |
-| Scope growth (semantics invented to fill gaps) | Every semantic rule is a `P2D-B` decision requiring owner approval; Category C lists deferrals |
-| Deep/recursive structures cause stack issues | Arena (flat) storage for HIR and types; explicit depth budgets (`P2D-A7`); no unbounded native recursion |
+| Member resolution split across stages becomes inconsistent | Separate side tables: `lower` returns syntactic `Resolutions`; `check` returns its own completed `Resolutions`; final-state invariant checks (every use resolved or explicitly `Unresolved` with a diagnostic) |
+| Desugaring loses source quality of diagnostics | Synthesized nodes carry originating spans and an `AstOrigin` (`P2D-A2`); diagnostics for desugared failures report the construct, not the expansion |
+| Scope growth (semantics invented to fill gaps) | Every semantic rule is a `P2D-B` decision requiring owner approval; Category C lists deferrals; Phase 2 vs Phase 5 boundary stated in §1 |
+| Deep/recursive structures cause stack issues | Arena (flat) storage for HIR and types; explicit depth and size budgets (`P2D-A7`, incl. `MAX_HIR_DEPTH`); no unbounded native recursion |
 | Diagnostic cascades | Poisoning rules and cascade suppression (`diagnostics-contract.md` §7) |
-| Import semantics blocked on the package model | `ModuleResolver` seam (`P2D-A5`, `P2D-B7`); single-module policy defined and tested; multi-module obligations documented as FUTURE |
-| Public API drift | PD-009 policy proposal (`P2D-B21`): all crates internal until owner decides otherwise |
+| Import semantics differing across modules | In-memory `ModuleRegistry` with stable `ModuleId`s and `GlobalDefId` (`P2D-A5`, `P2D-A2`); fail-closed import resolution and executable cycle detection (`P2D-B7`) |
+| Public API drift | Interim diagnostic/API policy (`P2D-A8`, formerly `P2D-B21`): all crates internal until the owner decides; PD-009/PD-010 stay OPEN |
+| Identity overflow/aliasing | Checked `u32` id allocation; exhaustion is a controlled error, never a saturated/shared id (`P2D-A2`) |
 
 ## 9. Validation obligations for this package (design-time)
 
