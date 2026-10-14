@@ -3,7 +3,9 @@
 **STATUS: PROPOSED — PENDING OWNER RATIFICATION**
 
 - **Directive:** Engineering Directive 010 §11 (diagnostic contract),
-  §12 (PD-009 review).
+  §12 (PD-009 review), amended by Engineering Directive 010-R1 §3–§4
+  (import resolution/cycle messages) and §10 (decision-packet
+  reclassification).
 - **Authoritative sources:** SPECIFIED §1 (diagnostics quality is an
   objective) and §6 Phase 2 (acceptance: primary span, secondary labels,
   suggestion); the accepted `xl-diag` crate; the accepted Phase 1
@@ -12,7 +14,7 @@
   mechanics for names), `type-system-contract.md` (poisoning),
   `traits-and-exhaustiveness.md` (trait/pattern messages),
   `conformance-plan.md` (§5 compile-fail fixtures),
-  `decision-packet.md` (`P2D-B21`, `P2D-A7`).
+  `decision-packet.md` (`P2D-A8`, `P2D-A7`).
 - **No implementation is authorized.** All messages below are PROPOSED
   shapes; exact final strings are pinned at implementation by snapshot
   tests. Nothing here claims that any message exists today.
@@ -174,7 +176,7 @@ error: the trait 'Show' is not implemented for 'Point'
   otherwise no suggestion is emitted).
 - Variant: `the trait bound 'i64: Ord' is not satisfied`.
 
-### 5.6 Cyclic import (required; future registry)
+### 5.6 Cyclic import (required; executable in Phase 2)
 
 ```text
 error: cyclic module import
@@ -186,13 +188,18 @@ error: cyclic module import
    = note: cycle: a → b → c → a
 ```
 
-- Primary: the import that closes the cycle. Secondary (when module
-  declaration sites are known): the module declaration spans. Note: the
-  full cycle path, rendered from the DFS stack
-  (`name-resolution-contract.md` §9.4).
-- In Phase 2 single-file mode this diagnostic is unreachable; its shape
-  is fixed now and its fixtures are edge-case documentation until the
-  registry phase.
+- Primary: the import that closes the cycle (the DFS back-edge). Secondary
+  (when module declaration sites are known through the registry): the
+  module declaration spans. Note: the full **witness path**, rendered from
+  the DFS stack (`name-resolution-contract.md` §9.4), reproduced
+  deterministically from a fixed traversal order.
+- This diagnostic is **executable in Phase 2** against the synthetic
+  `ModuleRegistry` (two- and three-module cycles, self-import); with the
+  single-module registry it is vacuous. Failing to detect a cycle must
+  never happen silently.
+- **Missing/unavailable imports** (the other import-level outcomes,
+  `P2D-B7`) have their own fail-closed diagnostics (§5.10), distinct from
+  the cycle diagnostic.
 
 ### 5.7 Non-exhaustive match (required)
 
@@ -246,12 +253,33 @@ warning: unreachable pattern
 | wrong arity | `this function takes 2 arguments but 1 was supplied` | the call/argument list | — |
 | not callable | `cannot call value of type 'i64'` | the callee | — |
 | not indexable | `cannot index into a value of type 'i64'` | the index expression | — |
-| private item | `item 'f' is private` | the use | — (future registry) |
+| private item | `item 'f' is private` | the use | — (registry-enforced) |
 | conflicting impls | `conflicting implementations of trait 'Show' for type 'Point'` | the later impl | — |
-| unresolved through opaque module | `module 'std.io' is not part of this compilation` | the member use | note: single-file checking only in this phase |
 | cannot infer | `cannot infer type; add a type annotation` | the binding/expression | help: annotation position |
 | cyclic type | `cyclic type` | the unifying expression | — |
 | resource limit | `checking resource limit exceeded in '<stage>'` | the construct | — (fail closed) |
+| identity space exhausted | `internal error: identifier space exhausted` | the module root (no user span) | exit `2`; result unusable (`P2D-A2`) |
+
+### 5.10 Import resolution (fail closed) — P2D-B7
+
+Import resolution distinguishes four outcomes
+(`name-resolution-contract.md` §9.3). The two failure outcomes are
+**errors in strict `xc check`**, reported at the import site even when the
+binding is unused:
+
+| Situation | Message (shape) | Primary | Secondary / note |
+| --- | --- | --- | --- |
+| Missing module | `cannot resolve import: module 'std.io' is not registered in this compilation` | the import path | note: single-file checking only in this phase |
+| Known but unavailable module | `cannot check module 'std.io': its interface is not available in this compilation` | the import path | secondary: the module declaration site (when known) |
+| Known module, symbol absent | `no item 'println' in module 'std.io'` | the member use | `did you mean …?` when close |
+| Known module, symbol private | `item 'f' is private` | the member use | secondary: the definition |
+
+- These are the **fail-closed** diagnostics (Directive 010-R1 §4):
+  `xc check` returns a non-zero status while any is present; it never
+  certifies an unresolved dependency as valid.
+- The accepted `import std.io;` is syntactically valid and reaches this
+  error only at the semantic stage; the message must not imply the syntax
+  is invalid.
 
 ## 6. Where messages are pinned
 
@@ -262,13 +290,16 @@ warning: unreachable pattern
 - `xc check` renders diagnostics through `xl_diag::render` exactly like
   `xc parse`; no second renderer may exist.
 
-## 7. PD-010 review — recommendation (P2D-B21)
+## 7. PD-010 review — interim policy (P2D-A8)
 
 PD-010 asks: should diagnostics carry stable error codes (e.g. `E0308`
 style)? What exact rendered format is canonical (color, terminal width)?
 Current status: PARTIALLY DEFINED — the Phase 0 plain-text format is a
 repository choice, not a specification claim; **this package does not
-silently resolve PD-010**.
+silently resolve PD-010**. This section records a recommendation and an
+interim policy under the reclassified Category A row **`P2D-A8`** (the
+former `P2D-B21`). **PD-010 remains OPEN**; approving `P2D-A8` ratifies
+only the interim policy and does not resolve or close PD-010.
 
 ### 7.1 Recommendation
 
@@ -316,7 +347,7 @@ silently resolve PD-010**.
   recommendation; if the owner chooses codes, the only change is an
   additive builder + render prefix, proposed separately.
 
-## 8. PD-009 review — public API compatibility (P2D-B21)
+## 8. PD-009 review — public API compatibility (P2D-A8)
 
 PD-009 (public API compatibility policy) is UNRESOLVED. Recommendation
 recorded here for the owner; **not resolved by this package**:
@@ -376,6 +407,8 @@ recorded here for the owner; **not resolved by this package**:
 | Diagnostics quality as a requirement from Phase 2 | SPECIFIED §9–§10 |
 | `xl-diag` model and renderer compatibility | accepted Phase 0 implementation |
 | One-diagnostic-per-cause; no panics | SPECIFIED §4; Phase 1 recovery discipline |
-| PD-010 open; recommendation recorded | `docs/pending-decisions.md` (not resolved) |
-| PD-009 open; recommendation recorded | `docs/pending-decisions.md` (not resolved) |
+| PD-010 open; interim policy + recommendation recorded | `docs/pending-decisions.md` (not resolved); `P2D-A8` |
+| PD-009 open; interim policy + recommendation recorded | `docs/pending-decisions.md` (not resolved); `P2D-A8` |
+| Fail-closed import diagnostics; executable cycle diagnostic | Directive 010-R1 §3–§4; `P2D-B7`; SPECIFIED §6 Phase 2 |
+| Identity-space-exhaustion internal error | Directive 010-R1 §5; `P2D-A2` |
 | Snapshot + `.stderr` test plan | SPECIFIED §6 Phase 2, §9 |

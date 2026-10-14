@@ -3,7 +3,8 @@
 **STATUS: PROPOSED — PENDING OWNER RATIFICATION**
 
 - **Directive:** Engineering Directive 010 §9 (static type system design),
-  §16 (safety and performance analysis).
+  §16 (safety and performance analysis), amended by Engineering Directive
+  010-R1 §5–§9 (identity, budgets, phase scope).
 - **Authoritative source:** original specification §7 (SPECIFIED type
   rules), §3 (surface), §6 Phase 2 (deliverables and acceptance).
 - **Companion documents:** `hir-contract.md` (input representation),
@@ -42,8 +43,8 @@ associated types, no global (unrestricted Hindley–Milner) inference.
 | Responsibility | Owner | Input → Output |
 | --- | --- | --- |
 | Type lowering (`TypeRef` → `TyId`) | `xl-types` | resolved HIR type refs → type arena nodes; diagnostics for malformed/unresolved types |
-| Syntactic name resolution | `xl-hir` (done before typing) | uses → definitions |
-| Type-directed resolution (fields/methods/members) | `xl-types` | `FieldSel::Unresolved` + types → `FieldSel` finals + diagnostics |
+| Syntactic name resolution | `xl-hir` (`lower`, done before typing) | uses → definitions; returned in `LowerOutput.resolutions` |
+| Type-directed resolution (fields/methods/members) | `xl-types` | `FieldSel::Unresolved` + types → `FieldSel` finals + diagnostics; returned in `CheckOutput.resolutions` |
 | Bidirectional checking & inference | `xl-types` | bodies → per-node types (side table `HirId → TyId`) |
 | Unification / constraint solving | `xl-types` (unification is the constraint solver; no separate constraint language) | `TyId` pairs → substitutions; one diagnostic per failed unification |
 | Trait solving (bound satisfaction, method selection, coherence) | `xl-types` | obligations → evidence or ambiguity/not-found diagnostics |
@@ -73,13 +74,21 @@ pub enum TyKind {
     Fn { params: Vec<TyId>, ret: TyId },
     Slice(TyId),             // `[T]`  (nameable; no Phase 2 expression produces it — P2D-B18)
     Array { elem: TyId, len: u64 },   // `[T; N]`, N resolved per P2D-B18
-    Nominal { def: DefId, args: Vec<TyId> },  // struct/enum/trait application
+    Nominal { def: GlobalDefId, args: Vec<TyId> },  // struct/enum/trait application (P2D-A2)
     Var(VarId),              // unresolved inference variable
     IntVar(VarId),           // integer-literal variable (defaults to i64)
     FloatVar(VarId),         // float-literal variable (defaults to f64)
     Range(TyId),             // internal: type of `a..b`; not nameable (P2D-B8)
 }
 ```
+
+`Nominal` names a **nominal definition** by its cross-module identity
+`GlobalDefId { module, definition }` (`hir-contract.md` §3), not a bare
+`DefId`, so two structs/enums with the same instance-scoped `DefId` in
+different modules are distinct types (Directive 010-R1 §6). Unification of
+`Nominal` requires equal `GlobalDefId` (and equal argument arity/values).
+Phase 2 registers one module, so all `GlobalDefId`s share one `ModuleId`,
+but the identity space is correct now.
 
 Notes:
 
@@ -442,14 +451,27 @@ SPECIFIED: `let` immutable by default; assignment requires `mut`
 
 ## 16. Complexity, limits, and adversarial inputs (P2D-A7)
 
+All budgets are **finite, explicit, deterministic counters** (never
+wall-clock timeouts) and all **fail closed** (Directive 010-R1 §8):
+
 | Concern | Bound |
 | --- | --- |
+| HIR nesting depth | `MAX_HIR_DEPTH = 256` (max nested block/expr/pat/type chain; source depth ≤ `MAX_PARSE_DEPTH = 64`; each desugaring adds ≤ 4 levels) |
+| HIR size (AST→HIR expansion) | `MAX_HIR_NODES = 1_000_000` per module |
+| Definitions recorded | `MAX_DEFS = 100_000` per module |
+| Uses recorded | `MAX_USES = 1_000_000` per module |
+| Module graph size | `MAX_MODULE_GRAPH_MODULES = 1_024`; `MAX_MODULE_GRAPH_EDGES = 16_384` |
+| Module graph traversal | `MAX_MODULE_GRAPH_DEPTH = 256` |
 | Type lowering depth | `MAX_TYPE_DEPTH = 128` (accepted source types are ≤ 64 by parser limits; defensive margin) |
 | Unification work | `MAX_UNIFY_STEPS` per body (proposal: 100_000 node-visits); occurs check O(|T|), bounded by the same budget |
 | Fresh variables per body | `MAX_INSTANTIATIONS` (proposal: 10_000) |
 | Trait solving | `MAX_TRAIT_DEPTH = 32`, cycle detection on solver goals (`traits` doc) |
 | Exhaustiveness | `MAX_PATTERN_CELLS` (proposal: 250_000 cell-visits per match), deterministic fail-closed diagnostic |
 | Diagnostic count | no hard cap; cascade suppression makes counts linear in root causes; the CLI never truncates |
+
+These values agree with the canonical list in `P2D-A7`
+(`decision-packet.md`), which is the single source of truth for the
+numbers.
 
 - All budgets fail **closed**: exceeding one produces a specific error
   diagnostic (`checking resource limit exceeded in <stage>`) — never a

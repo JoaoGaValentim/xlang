@@ -3,7 +3,9 @@
 **STATUS: PROPOSED — PENDING OWNER RATIFICATION**
 
 - **Directive:** Engineering Directive 010 §9 (traits, coherence, orphan
-  rule) and §10 (Maranget-style exhaustiveness proposal).
+  rule) and §10 (Maranget-style exhaustiveness proposal), amended by
+  Engineering Directive 010-R1 §6 (package-scoped ownership/orphan rule)
+  and §9 (Phase 2 impl scope vs Phase 5 blanket impls).
 - **Companion documents:** `type-system-contract.md` (types, unification,
   budgets), `hir-contract.md` (patterns, impls, traits),
   `name-resolution-contract.md` (paths, ambiguity, suggestions),
@@ -123,13 +125,24 @@ coherence. Implementation plan:
   - `impl<T> Show for Vec<T>` vs `impl<T> Show for Option<T>` → no
     overlap (different heads).
   - `impl<T> Show for T` (blanket) overlaps with every other `Show` impl.
-- **Overlap with `impl<T> Show for T` alone** (no conflicting impl) is
-  accepted (it does not violate “one implementation per pair”
-  syntactically); the trait solver handles it with cycle detection and
-  budgets. Whether Phase 2 should instead **reject blanket impls**
-  outright is an explicit packet alternative (`P2D-B14`); the
-  recommendation is to allow them with the solver safeguards, because the
-  grammar permits them and the original does not forbid them.
+- **Phase 2 impl scope (`P2D-B14`, Directive 010-R1 §9).** The
+  recommendation is to **support generic impls whose self-type head is a
+  nominal type** (`impl<T> Show for Vec<T>`, `impl Show for Point`,
+  `impl<T, U> Show for Pair<T, U>`) — these are the impls the
+  specification’s `impl … for …` surface and bound checking require in
+  Phase 2, and their coherence check is the ordinary unification-based
+  overlap check above.
+- **Unconstrained blanket impls** (`impl<T> Show for T`) are **deferred to
+  Phase 5**. They are not required for Phase 2 semantic checking, they
+  make coherence algorithmic (overlap with every impl), and they can
+  silently capture method selection across the whole program — a
+  trait-ecosystem concern (Directive 010-R1 §9). The packet keeps all
+  alternatives: (i) allow blanket impls now with solver cycle detection
+  and depth limits; (ii) reject blanket impls outright; (iii)
+  nominal-head generic impls only (recommended, pending owner decision).
+- The solver still ships cycle detection and depth limits (`§2.7`)
+  because nominal-head generic impls can themselves be recursive
+  (`impl<T: Show> Show for Vec<T>`).
 - Diagnostics: `conflicting implementations of trait 'Show' for type
   'Point'` (primary at the later impl header, secondary at the first,
   with a note naming the unifying substitution when the conflict is
@@ -137,25 +150,38 @@ coherence. Implementation plan:
 - Inherent impls do not participate in trait coherence (they have no
   trait), but their method-name uniqueness is enforced (§2.2).
 
-### 2.5 Orphan rule
+### 2.5 Orphan rule (ownership domain)
 
-SPECIFIED §7. Statement of the rule for XLANG:
+SPECIFIED §7. Statement of the rule for XLANG, with an explicit
+ownership domain (Directive 010-R1 §6):
 
-- For `impl Trait for Type`, at least one of `Trait` or `Type` must be
-  **local** to the module containing the impl; otherwise the impl is an
-  orphan: `only traits defined in the current module can be implemented
-  for external types` (and the mirror case: an external trait may be
-  implemented for a local type).
-- In Phase 2 single-module mode, every trait and type is local, so the
-  rule is vacuously satisfied — it must still be **implemented and
-  unit-tested** against a synthetic registry (test-only multi-module
-  harness) so that the registry phase inherits a working check. Running
-  it against real multi-file input is FUTURE (Category C).
-- The prelude’s `Option`/`Result` are **local to the prelude**, which is
-  part of the current module’s scope: implementing a user trait for
-  `Option<T>` is legal (the trait is local); implementing an imported
-  (opaque-module) trait for any type is an orphan error once a registry
-  exists.
+- **Definition ownership is modeled explicitly and includes a package
+  identity.** Every definition carries its owning `ModuleId` and, through
+  it, its `PackageId` (`hir-contract.md` §3), and every cross-module
+  reference is a `GlobalDefId { module, definition }`.
+- **Ownership domain = the package.** For `impl Trait for Type`, the impl
+  is legal when at least one of `Trait` or `Type` is **owned by the
+  current package** (i.e. defined in a module whose `PackageId` equals the
+  impl module’s package). This is the recommended policy: it preserves the
+  ordinary ability to implement a local trait for a foreign type and a
+  foreign trait for a local type *within one package*, and it does not
+  silently establish a permanent module-only orphan rule that would later
+  make normal cross-module implementations inside one package invalid.
+  The alternative (module-scoped ownership) is recorded in the packet.
+- **Phase 2.** In the single-module mode every trait and type is in the
+  one synthetic package, so the rule is vacuously satisfied. It is still
+  **implemented and unit-tested** against the synthetic registry harness
+  (`P2D-A5`), including cross-module cases within one package (legal) and
+  an external-package case (orphan), so the registry/package phase
+  inherits a working check. Running it against real multi-file input is
+  FUTURE (Category C).
+- Diagnostics name the ownership domain consistently: `only traits defined
+  in the current package can be implemented for external types` (and the
+  mirror case). The earlier “current module” wording is superseded.
+- The prelude’s `Option`/`Result` are **owned by the current package’s
+  prelude module**: implementing a user trait for `Option<T>` is legal
+  (the trait is local to the package); implementing a trait owned by an
+  external package for any type is an orphan error.
 
 ### 2.6 Method selection (deterministic order)
 
@@ -217,7 +243,7 @@ Representative messages (exact strings pinned at implementation,
 - `the trait bound 'i64: Ord' is not satisfied`
 - `the trait 'Show' is not implemented for 'Point'`
 - `conflicting implementations of trait 'Show' for type 'Point'`
-- `only traits defined in the current module can be implemented for imported types`
+- `only traits defined in the current package can be implemented for external types`
 - `method 'show' is not a member of trait 'Show'` (extra method)
 - `missing method 'show' in implementation of trait 'Show'`
 - `multiple applicable methods in scope`
@@ -438,10 +464,15 @@ Trait side:
 2. Bounds: satisfaction at instantiation (positive/negative), one-bound
    limit, undeclared bound path.
 3. Coherence: exact duplicates, generic overlaps (`Vec<T>` vs
-   `Vec<i64>`), non-overlaps, blanket impls (alone and conflicting).
-4. Orphan rule via the synthetic registry harness.
+   `Vec<i64>`), non-overlaps, and (Phase 2 scope) nominal-head generic
+   impls; `impl<T> Show for T` is exercised as a deferred-Phase-5 case
+   (recorded, not accepted in Phase 2 under the recommended scope).
+4. Orphan rule via the synthetic registry harness: same-package
+   cross-module impl (legal) and external-package impl (orphan).
 5. Method selection: inherent precedence, trait ordering, ambiguity,
    no-method suggestions, field/method collision.
+6. Trait solving determinism: identical goals produce identical
+   evidence/diagnostics; budgets and cycle detection are exercised.
 
 Exhaustiveness side:
 
@@ -467,7 +498,8 @@ The corpus identifiers and `.x`/`.stderr` fixtures are enumerated in
 | --- | --- |
 | Trait declarations, `impl Trait for Type`, bounds | SPECIFIED §7; grammar §3.1 |
 | Coherence: one impl per trait/type pair | SPECIFIED §7 |
-| Orphan rule | SPECIFIED §7 |
+| Orphan rule (ownership domain = package) | SPECIFIED §7; Directive 010-R1 §6; `P2D-A5`/`P2D-B14` |
+| Phase 2 impl scope (nominal-head generic impls; blanket deferred) | Directive 010-R1 §9; `P2D-B14` |
 | Associated types excluded (v1.1) | SPECIFIED §7 |
 | Maranget exhaustiveness; reachability; non-exhaustive match is an error | SPECIFIED §6 Phase 2, §7 |
 | One bound per generic parameter (grammar) | ratified grammar-rfc §3.1 |
