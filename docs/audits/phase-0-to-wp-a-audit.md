@@ -97,9 +97,9 @@ structural/synthesized keys. The ratified budgets are depth 256, nodes
 | HIR-001 / P2 | `xl-hir::validate`, import record consistency | Change an import-record declaration span to disagree with its item or module-binding span. Previous validator compared path/binding but omitted these equality checks. | Require `item.span == record.decl_span` and `binding.span == record.decl_span`; `mismatched_import_spans_are_rejected` and related import-negative tests. | Negative-validation suite passed; included in WP-A PR. |
 | HIR-002 / P1 | `xl-hir::validate`, all arena references must be valid | Append an unreachable node containing `HirId(u32::MAX)` and a matching origin. **Red phase:** original validator returned `[]` and the test failed. Disconnected bodies and types likewise escaped full traversal. | Track all visited arena entries, report `UnreachableArenaEntry`, traverse orphaned nodes/bodies/types to detect malformed references; mark poison expression/statement and error-type entries visited. Tests `orphaned_arena_node_with_invalid_reference_is_rejected`, `orphaned_body_with_invalid_statement_is_rejected`, `orphaned_type_with_invalid_element_is_rejected`. | All three negative tests and full HIR suite pass; included in WP-A PR. |
 | HIR-003 / P1 | `xl-hir::validate`, signature arena completeness | Append a cloned, unreferenced `FnSig` with an invalid parameter `DefId(u32::MAX)`. **Red phase:** `validate()` returned `[]`; targeted test failed. Signatures were checked for spans only; no reachability or contained-reference traversal occurred. | Track visited signatures, reject orphan signatures, traverse their referenced params/return types, reject unknown signature owners; `orphaned_signature_with_invalid_parameter_is_rejected`. | Red reproduction recorded; complete HIR suite passes after correction; included in WP-A PR. |
-| HIR-004 / P1 | `xl-hir`, portable native-stack safety at ratified HIR depth | The original `deep_hand_built_expressions_are_poisoned_at_the_limit` test crashed on the Windows runner with `STATUS_STACK_OVERFLOW` (PR #8 initial CI run `38659704990`, Windows job `116177794199`). Reproduced on macOS with `RUST_MIN_STACK=1048576`, exiting with `SIGABRT`. Recursive lowering exhausted a 1-MiB stack before reaching the permitted 256-depth poison boundary. | Guard the bounded lowering and structural-validation traversals with conditional stack growth; run both 240-array valid lowering/validation and 300-array depth-poison cases inside an explicitly 1-MiB test thread on every platform. | Small-stack regression passed locally after correction; cross-platform recheck required on the updated PR. |
-| HIR-005 / P1 | `xl-hir`, ratified budgets must never be enlarged through public test overrides | Before correction, `lower_structure_with_limits` and `validate_with_limits` accepted caller-supplied values of `u32::MAX`; a 300-array AST bypassed the depth cutoff and overflowed the test stack. | Cap all four caller-provided limits to their ratified maxima at both public entry points. `explicit_limits_cannot_relax_the_ratified_depth_budget` reproduces the failure with an enlarged depth budget; `configurable_limits_can_tighten_but_never_expand_ratified_budgets` checks all four caps without allocating large arenas. | Depth regression passed locally after correction; new four-budget unit regression and final CI pending. |
-| HIR-006 / P2 | Deterministic snapshots require identical source bytes on all CI platforms | Windows run `38663676913` passed deep resource tests but failed `snapshot_specification_example`: CRLF checkout changed fixture offsets (`item#1 span=16..47` on LF versus `18..49` on CRLF) without altering HIR structure. | Add `.gitattributes` to pin `crates/xl-hir/tests/fixtures/spec_example.x` to LF and assert the fixture has no CR before lowering. Preserve production source handling and the original specification archive. | Windows Check passed on `38664048209`; its Format job exposed a formatting-only correction. All-green CI rerun still required. |
+| HIR-004 / P1 | `xl-hir`, portable native-stack safety at ratified HIR depth | The original `deep_hand_built_expressions_are_poisoned_at_the_limit` test crashed on the Windows runner with `STATUS_STACK_OVERFLOW` (PR #8 initial CI run `38659704990`, Windows job `116177794199`). Reproduced on macOS with `RUST_MIN_STACK=1048576`, exiting with `SIGABRT`. Recursive lowering exhausted a 1-MiB stack before reaching the permitted 256-depth poison boundary. | Guard the bounded lowering and structural-validation traversals with conditional stack growth; run both 240-array valid lowering/validation and 300-array depth-poison cases inside an explicitly 1-MiB test thread on every platform. | PASS: targeted 1-MiB test locally and complete Windows/Ubuntu/macOS test jobs on final code SHA `6f64d08` (CI `38664341782`). |
+| HIR-005 / P1 | `xl-hir`, ratified budgets must never be enlarged through public test overrides | Before correction, `lower_structure_with_limits` and `validate_with_limits` accepted caller-supplied values of `u32::MAX`; a 300-array AST bypassed the depth cutoff and overflowed the test stack. | Cap all four caller-provided limits to their ratified maxima at both public entry points. `explicit_limits_cannot_relax_the_ratified_depth_budget` reproduces the failure with an enlarged depth budget; `configurable_limits_can_tighten_but_never_expand_ratified_budgets` checks all four caps without allocating large arenas. | PASS: targeted depth regression locally and four-cap unit regression in cross-platform workspace suite (CI `38664341782`). |
+| HIR-006 / P2 | Deterministic snapshots require identical source bytes on all CI platforms | Windows run `38663676913` passed deep resource tests but failed `snapshot_specification_example`: CRLF checkout changed fixture offsets (`item#1 span=16..47` on LF versus `18..49` on CRLF) without altering HIR structure. | Add `.gitattributes` to pin `crates/xl-hir/tests/fixtures/spec_example.x` to LF and assert the fixture has no CR before lowering. Preserve production source handling and the original specification archive. | PASS: Windows snapshot and separate Format job on final code SHA `6f64d08` (CI `38664341782`). |
 | DOC-001 / P3 | Repository status accuracy | `docs/phase-status.md`, `docs/roadmap.md` and `docs/architecture.md` retain an earlier statement that PR #7 is unmerged and HIR is not authorized, contrary to integrated `main` SHA `5eaa6ab` and Directive 011-R1. | Correct the current status to integrated architecture/authorized WP-A while retaining chronological historical acceptance records. | Documentation-only correction within the WP-A update, not a language-semantic change. |
 
 No unrelated Phase 0 or Phase 1 functional correction was needed, so no
@@ -204,8 +204,8 @@ their default test-harness worker stacks. These failures are distinct from
 the originally failing `tests/errors.rs` regression. The resource cases now
 execute construction, lowering, validation and drop in explicitly sized
 1-MiB worker threads, as the passing error regression already did. The
-complete resource suite passed locally after that change (7/7); a fresh
-Windows CI run remains mandatory. The exact overflowing frame in the
+complete resource suite passed locally after that change (7/7); the final
+Windows CI run also passed. The exact overflowing frame in the
 original default-worker test was not captured by the CI logs, so whether
 it was lowering or destruction on that path remains unproven.
 
@@ -220,8 +220,8 @@ sanitizer flag requires nightly; those failed runs are not counted.
 CI run `38664048209` passed all three Check jobs, including Windows
 snapshot, 1-MiB resource tests and the new locked workspace build. Its
 separate Format job rejected the layout of one assertion in
-`tests/snapshots.rs`; this was corrected using `cargo fmt --all` and requires
-one final CI run on the resulting commit.
+`tests/snapshots.rs`; this was corrected using `cargo fmt --all` and verified
+by the subsequent successful CI run `38664341782`.
 
 **Dependency assessment.** `stacker` is pinned to exactly `0.1.25`; the
 lockfiles resolve `psm 0.1.32`. Its production dependency tree includes
@@ -241,12 +241,40 @@ initially reported an expected formatting difference in `tests/resource.rs`;
 `cargo fmt --all` then completed. A subsequent attempt to run the four
 mandatory workspace gates as a single logged process was blocked by the
 Codex tool safety-status check before a subprocess result was returned.
-Those four results therefore remain **UNVERIFIED on this final revision**;
-the R2 CI workflow adds `cargo build --workspace --locked` to the three OS
-jobs so all four required commands are covered by the published CI. GitHub
-Actions must execute the updated commit before owner review. The
-previously recorded 613 test passes and 25,114 fuzz executions apply to
-earlier local revisions and are not counted as final-revision evidence.
+Those four results remain **UNVERIFIED as a complete local run on the final
+revision**. The R2 CI workflow added `cargo build --workspace --locked` to
+all three OS jobs. GitHub Actions run `38664341782` subsequently executed
+all four mandatory gates successfully against `6f64d0841ff0a84b51ac66264669a0494b54ad1b`.
+The previously recorded 613-test local run and 25,114 fuzz executions apply
+to earlier local revisions and are not counted as final-revision evidence.
+
+### Final cross-platform evidence — Directive 011-R2
+
+The completed [CI run 38664341782](https://github.com/JoaoGaValentim/xlang/actions/runs/38664341782)
+on code SHA `6f64d0841ff0a84b51ac66264669a0494b54ad1b`
+reported **success** on 2026-10-15 UTC. Its four jobs finished successfully:
+
+| Job | Result | Actual test summaries |
+| --- | --- | --- |
+| Format | PASS — `cargo fmt --all -- --check` | N/A |
+| Check (ubuntu-latest) | PASS — Clippy, workspace tests, locked build | 615 passed; 0 failed; 0 ignored (65 groups) |
+| Check (macos-latest) | PASS — Clippy, workspace tests, locked build | 615 passed; 0 failed; 0 ignored (65 groups) |
+| Check (windows-latest) | PASS — Clippy, workspace tests, locked build | 613 passed; 0 failed; 0 ignored (65 groups) |
+
+All check jobs completed `cargo clippy --workspace --all-targets -- -D warnings`,
+`cargo test --workspace`, and `cargo build --workspace --locked` successfully.
+The full workspace suite includes the 1-MiB HIR depth/poison regression,
+configurable-limit regression, desugaring cases, structural HIR validation,
+and specification-example snapshot. Windows' total differs from Unix by two
+platform-specific tests, as in the historical accepted baseline.
+
+PR #8 was open and mergeable with a clean published branch at the code SHA
+above. **WP-A is ready for manual project-owner review and integration**
+based on the final code/CI evidence, subject to a fresh successful CI check
+for any later commits, including this documentation-only audit update.
+No merge, owner acceptance, or WP-B start is authorized here. The PR
+description still contains earlier R1 test counts; updating its text was
+denied by GitHub HTTP 403 in the previous attempt.
 
 Unproven questions, not classified as confirmed defects: possible aliasing
 of a HIR node through multiple parent paths could make visitation-sensitive
