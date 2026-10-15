@@ -97,6 +97,8 @@ structural/synthesized keys. The ratified budgets are depth 256, nodes
 | HIR-001 / P2 | `xl-hir::validate`, import record consistency | Change an import-record declaration span to disagree with its item or module-binding span. Previous validator compared path/binding but omitted these equality checks. | Require `item.span == record.decl_span` and `binding.span == record.decl_span`; `mismatched_import_spans_are_rejected` and related import-negative tests. | Negative-validation suite passed; included in WP-A PR. |
 | HIR-002 / P1 | `xl-hir::validate`, all arena references must be valid | Append an unreachable node containing `HirId(u32::MAX)` and a matching origin. **Red phase:** original validator returned `[]` and the test failed. Disconnected bodies and types likewise escaped full traversal. | Track all visited arena entries, report `UnreachableArenaEntry`, traverse orphaned nodes/bodies/types to detect malformed references; mark poison expression/statement and error-type entries visited. Tests `orphaned_arena_node_with_invalid_reference_is_rejected`, `orphaned_body_with_invalid_statement_is_rejected`, `orphaned_type_with_invalid_element_is_rejected`. | All three negative tests and full HIR suite pass; included in WP-A PR. |
 | HIR-003 / P1 | `xl-hir::validate`, signature arena completeness | Append a cloned, unreferenced `FnSig` with an invalid parameter `DefId(u32::MAX)`. **Red phase:** `validate()` returned `[]`; targeted test failed. Signatures were checked for spans only; no reachability or contained-reference traversal occurred. | Track visited signatures, reject orphan signatures, traverse their referenced params/return types, reject unknown signature owners; `orphaned_signature_with_invalid_parameter_is_rejected`. | Red reproduction recorded; complete HIR suite passes after correction; included in WP-A PR. |
+| HIR-004 / P1 | `xl-hir`, portable native-stack safety at ratified HIR depth | The original `deep_hand_built_expressions_are_poisoned_at_the_limit` test crashed on the Windows runner with `STATUS_STACK_OVERFLOW` (PR #8 initial CI run `38659704990`, Windows job `116177794199`). Reproduced on macOS with `RUST_MIN_STACK=1048576`, exiting with `SIGABRT`. Recursive lowering exhausted a 1-MiB stack before reaching the permitted 256-depth poison boundary. | Guard the bounded lowering and structural-validation traversals with conditional stack growth; run both 240-array valid lowering/validation and 300-array depth-poison cases inside an explicitly 1-MiB test thread on every platform. | Small-stack regression passed locally after correction; cross-platform recheck required on the updated PR. |
+| HIR-005 / P1 | `xl-hir`, ratified budgets must never be enlarged through public test overrides | Before correction, `lower_structure_with_limits` and `validate_with_limits` accepted caller-supplied values of `u32::MAX`; a 300-array AST bypassed the depth cutoff and overflowed the test stack. | Cap all four caller-provided limits to their ratified maxima at both public entry points. `explicit_limits_cannot_relax_the_ratified_depth_budget` reproduces the failure with an enlarged depth budget; `configurable_limits_can_tighten_but_never_expand_ratified_budgets` checks all four caps without allocating large arenas. | Depth regression passed locally after correction; new four-budget unit regression and final CI pending. |
 | DOC-001 / P3 | Repository status accuracy | `docs/phase-status.md`, `docs/roadmap.md` and `docs/architecture.md` retain an earlier statement that PR #7 is unmerged and HIR is not authorized, contrary to integrated `main` SHA `5eaa6ab` and Directive 011-R1. | Correct the current status to integrated architecture/authorized WP-A while retaining chronological historical acceptance records. | Documentation-only correction within the WP-A update, not a language-semantic change. |
 
 No unrelated Phase 0 or Phase 1 functional correction was needed, so no
@@ -138,23 +140,82 @@ without recorded crashes; it predates the final validator changes. A later
 31-second run on the corrected validator executed 39,396 units without
 recorded crashes (`evidence/r1-final-hir-fuzz.log` in the external recovery
 snapshot). This limited run is adversarial evidence, not a proof of safety.
+Following HIR-004's stack-safety correction, the harness was compiled again
+and ran **25,114 additional executions in 21 seconds** without recorded
+crashes (`evidence/r1-windows-fix-hir-fuzz.log`). Earlier runs used the
+pre-HIR-004 code; only the final run exercises its stack-growth guard.
 
 ## Directive 011-R1 local verification
 
-On `phase/2-hir-foundation`, these checks completed with exit code zero on
-macOS. Evidence logs are retained in the external recovery snapshot.
+On `phase/2-hir-foundation`, these checks completed successfully on macOS
+before and after HIR-004. The table reports the later post-fix execution;
+logs are retained in the external recovery snapshot.
 
 | Gate | Result / evidence |
 | --- | --- |
-| `cargo fmt --all -- --check` | PASS — `evidence/r1-final-fmt.log` |
-| `cargo clippy --workspace --all-targets -- -D warnings` | PASS — `evidence/r1-final-clippy.log` |
-| `cargo test --workspace` | PASS — **613 passed, 0 failed**, in 65 test/doc-test result groups; `evidence/r1-final-test.log` |
-| `cargo build --workspace --locked` | PASS — `evidence/r1-final-build.log` |
+| `cargo fmt --all -- --check` | PASS — `evidence/r1-post-winfix-fmt.log` |
+| `cargo clippy --workspace --all-targets -- -D warnings` | PASS — `evidence/r1-post-winfix-clippy.log` |
+| `cargo test --workspace` | PASS — **613 passed, 0 failed**, in 65 test/doc-test result groups; `evidence/r1-post-winfix-test.log` |
+| `cargo build --workspace --locked` | PASS — `evidence/r1-post-winfix-build.log` |
 | Archived specification SHA-256 | PASS — `c3c6bce5b3e804b5c6441398e4665ac9271df4f2ca2af262d8019bcb4b343770` |
 | `lower_hir` post-repair fuzzing | 39,396 executions in 31 seconds, no recorded crash; `evidence/r1-final-hir-fuzz.log` |
+| `lower_hir` after HIR-004 | 25,114 executions in 21 seconds, no recorded crash; `evidence/r1-windows-fix-hir-fuzz.log` |
 
 Cross-platform GitHub CI on the proposed PR remains a separate required
 gate. Local macOS checks are not evidence of Linux or Windows success.
+
+## Directive 011-R2 — HIR-004 follow-up and final validation gate
+
+The local R2 working tree began at `fb0e76eff22c2f6024af7d4d50764886e6464424`
+on `phase/2-hir-foundation` with 10 modified tracked files and no untracked
+files. A new external snapshot, `~/.local/share/xlang-recovery/011-R2-final-20261015T005532Z`,
+preserved 42 source artifacts and 10 Git index versions. Its `manifest.json`
+SHA-256 is `b9008de33864c5f2284f00889c3d7fba75681447e2f6d4e85a39f1994bf6bd17`;
+an independent temporary restoration verified byte counts and hashes. The
+original 011-R1 and first 011-R2 archives remain present.
+
+The 1-MiB reproducer on the pre-fix revision reached the lowering call and
+overflowed before that call returned. It did not produce a complete native
+stack trace, so the exact recursive frame cannot be assigned conclusively.
+Lowering contains recursive expression traversal; validation also recursively
+walks HIR arena references. Both public entry points now use
+`stacker::maybe_grow` with a 1,536-KiB remaining-stack threshold and an
+8-MiB segment for the bounded traversal. The 256-depth poisoning check stays
+independent of stack growth. AST destruction happens inside the regression's
+1-MiB thread; the resulting HIR arena does not recursively own its nodes.
+
+The targeted `deep_hand_built_expressions_are_poisoned_at_the_limit` test
+passed on macOS with `RUST_MIN_STACK=1048576`: 64, 100, 128, 240, and 255
+wrapping arrays lower and validate; 256, 257, 300, and 1024 arrays each
+produce the one ratified depth-limit diagnostic and structurally valid
+poisoned HIR. Each array wrapper adds one HIR expression level around the
+literal, so 255 wrappers reach a counted depth of 256. The same test checks
+cyclic and out-of-range references within the deeply built arena. The
+`explicit_limits_cannot_relax_the_ratified_depth_budget` targeted regression
+also passed after capping the caller-specified limits.
+
+**Dependency assessment.** `stacker` is pinned to exactly `0.1.25`; the
+lockfiles resolve `psm 0.1.32`. Its production dependency tree includes
+`cfg-if 1.0.5`, `libc 0.2.190`, and `psm 0.1.32`; native build dependencies
+include `cc 1.8.0`, `ar_archive_writer 0.5.3`, and their locked transitive
+dependencies. Rust is pinned to 1.99.0. This solution keeps the recovered
+HIR traversal and limits intact while protecting public entry points on
+supported targets; an iterative rewrite would touch a substantially wider
+surface. XLANG's `#![forbid(unsafe_code)]` remains in force; third-party
+stack assembly is outside that crate-level guarantee. Growth requires a
+platform implementation capable of measuring remaining stack. Unsupported
+targets, unusual toolchains, and native-stack resource exhaustion remain
+portability limitations; CI validates only Linux, macOS, and Windows.
+
+**Pending verification.** The post-HIR-005 `cargo fmt --all -- --check`
+initially reported an expected formatting difference in `tests/resource.rs`;
+`cargo fmt --all` then completed. A subsequent attempt to run the four
+mandatory workspace gates as a single logged process was blocked by the
+Codex tool safety-status check before a subprocess result was returned.
+Those four results therefore remain **UNVERIFIED on this final revision**;
+GitHub Actions must execute the updated commit before owner review. The
+previously recorded 613 test passes and 25,114 fuzz executions apply to
+earlier local revisions and are not counted as final-revision evidence.
 
 Unproven questions, not classified as confirmed defects: possible aliasing
 of a HIR node through multiple parent paths could make visitation-sensitive
