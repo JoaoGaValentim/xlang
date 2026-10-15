@@ -21,13 +21,13 @@ the syntax tree with canonical printing and structural validation
 integrated via PR #5), and the command-line interface (`xl-cli`,
 integrated via PR #6; **Phase 1 accepted** under Engineering Directive 010
 on 2026-10-14 — closure record in `docs/phase-status.md`). Phase 2 (name
-resolution and type system) is a **design gate**, **owner-ratified** by
-Engineering Directive 010-R3 (ADR-0005) and **pending integration** (PR #7
-open, unmerged): the package under `docs/proposals/phase-2/` is
-documentation only.
-**No HIR, name resolution, type checking, MIR, bytecode, VM, native code
-generation, standard library, formatter, LSP, or package management code
-exists in this repository.**
+resolution and type system) has an **owner-ratified, integrated** design
+(Directive 010-R3, ADR-0005; PR #7 merged as `5eaa6ab`). Directive 011-R1
+authorizes WP-A structural HIR implementation. The recovered `xl-hir`
+crate is being prepared for owner review; it is not yet integrated into
+`main`. **WP-B name resolution/import graph validation, WP-C type checking,
+WP-D `xc check`, MIR, bytecode, VM, native code generation, standard
+library, formatter, LSP and package management remain unimplemented.**
 
 ```text
 ┌──────────────────────────┐

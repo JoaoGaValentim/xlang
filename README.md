@@ -21,16 +21,21 @@ the user-facing command `xc parse` (`xl-cli`). Phase 1 is syntax-only and
 its closure record (merge SHA, post-merge CI, acceptance matrix, fuzzing
 evidence, limitations) is in `docs/phase-status.md`.
 
-**Phase 2 — Name resolution and type system: DESIGN GATE.** The design
-package under `docs/proposals/phase-2/` is **owner-ratified** by
-Engineering Directive 010-R3 (2026-10-14; ADR-0005) and is **pending
-integration** — PR #7 is open and unmerged. No implementation is
-authorized.
+**Phase 2 — Name resolution and type system: IN PROGRESS — NOT COMPLETE.**
+The design package under `docs/proposals/phase-2/` is owner-ratified by
+Engineering Directive 010-R3 (2026-10-14; ADR-0005) and **integrated**
+(PR #7 merged). Work Package A — the HIR foundation and structural
+lowering (`crates/xl-hir`) — is **IMPLEMENTED, PENDING OWNER REVIEW**
+(Engineering Directive 011-R1). Work Packages B (name resolution), C (type
+checking), and D (`xc check`) are **NOT STARTED**; Phase 2 as a whole is
+**NOT COMPLETE**, and no name resolution or type checking exists.
 
 XLANG is not yet executable and no type checking exists: there is no name
 resolution, type checker, runtime, standard library, or code generator, and
 `xc` never runs a program. The printed AST is normalized XLANG syntax for
-the parsed tree, not compiled code.
+the parsed tree, not compiled code. The `xl-hir` crate builds the
+high-level intermediate representation with structural lowering only —
+name resolution and type checking are later, unauthorized work packages.
 
 What exists today:
 
@@ -46,6 +51,12 @@ What exists today:
   validator.
 - **`xl-parser`** — recursive-descent and Pratt parser with ratified error
   recovery and bounded recursion.
+- **`xl-hir`** — Phase 2 WP-A: arena-owned HIR data model, checked
+  identifier allocation, AST origin mapping, structural lowering of every
+  accepted AST construct, the ratified desugarings (`for`, `?`, string
+  interpolation), the structural validator, and resource budgets. It
+  performs **no name resolution and no type checking** (WP-B/WP-C), and
+  `xl-cli` behavior is unchanged.
 - **`xl-cli`** — the `xc` binary; `xc parse <file.x>` prints the canonical
   AST.
 - Architecture, governance, and decision documentation under `docs/`,
@@ -55,6 +66,11 @@ What exists today:
 - Recorded Phase 1 acceptance evidence: the specification example parses
   and round-trips, and one hour of combined lexer/parser fuzzing completed
   with zero failures (`fuzz/fuzz_targets/lex_parse.rs`).
+- Recorded WP-A evidence: 613 workspace tests/doc tests passed (0 failed
+  on macOS, versus 484 in the Phase 1 baseline), and 39,396 post-repair
+  fuzzing executions of the new lex+parse+lower+validate target
+  (`fuzz/fuzz_targets/lower_hir.rs`). Evidence is recorded in
+  `docs/audits/phase-0-to-wp-a-audit.md` and the external recovery snapshot.
 - GitHub Actions CI running formatting, clippy (`-D warnings`), and tests
   on Linux, Windows, and macOS.
 

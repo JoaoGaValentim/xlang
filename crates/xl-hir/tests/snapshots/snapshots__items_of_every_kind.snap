@@ -1,0 +1,71 @@
+---
+source: crates/xl-hir/tests/snapshots.rs
+expression: dump_module(&output.module)
+---
+module module#0 package package#0 file 0
+items:
+  item#0 kind=import def=def#0 span=0..21 origin=item#0
+  item#1 kind=struct def=def#1 span=30..68 origin=item#1
+  item#2 kind=enum def=def#5 span=77..110 origin=item#2
+  item#3 kind=trait def=def#8 span=119..156 origin=item#3
+  item#4 kind=impl def=def#12 span=165..231 origin=item#4
+  item#5 kind=fn def=def#16 span=240..264 origin=item#5
+imports:
+  import item=item#0 binding=def#0 path=[use#0,use#1] span=0..21
+defs:
+  def#0 name="io2" kind=module-binding path=[std,io] alias="io2" target=unresolved parent=- vis=private span=17..20 origin=struct(item#0,[2])
+  def#1 name="Point" kind=struct generics=[def#2] fields=[def#3,def#4] parent=- vis=pub span=41..46 origin=item#1
+  def#2 name="T" kind=generic-param bound=- parent=def#1 vis=private span=47..48 origin=struct(item#1,[0, 0])
+  def#3 name="x" kind=field ty=type#0 parent=def#1 vis=pub span=56..57 origin=struct(item#1,[1])
+  def#4 name="y" kind=field ty=type#1 parent=def#1 vis=private span=62..63 origin=struct(item#1,[2])
+  def#5 name="Shape" kind=enum generics=[] variants=[def#6,def#7] parent=- vis=private span=82..87 origin=item#2
+  def#6 name="Circle" kind=variant payload=[type#2] parent=def#5 vis=private span=90..96 origin=struct(item#2,[1])
+  def#7 name="Empty" kind=variant payload=[] parent=def#5 vis=private span=103..108 origin=struct(item#2,[2])
+  def#8 name="Show" kind=trait generics=[def#9] items=[def#10] parent=- vis=private span=125..129 origin=item#3
+  def#9 name="T" kind=generic-param bound=- parent=def#8 vis=private span=130..131 origin=struct(item#3,[0, 0])
+  def#10 name="show" kind=trait-item sig=sig#0 parent=def#8 vis=private span=138..142 origin=struct(item#3,[1])
+  def#11 name="self" kind=receiver index=0 parent=def#10 vis=private span=143..147 origin=struct(item#3,[1, 0, 0])
+  def#12 name="" kind=impl generics=[def#13] trait=type#5 self_ty=type#7 inherent=false parent=- vis=private span=165..231 origin=item#4
+  def#13 name="T" kind=generic-param bound=- parent=def#12 vis=private span=170..171 origin=struct(item#4,[0, 0])
+  def#14 name="show" kind=method generics=[] sig=sig#1 body=body#0 parent=def#12 vis=pub span=203..207 origin=struct(item#4,[3])
+  def#15 name="self" kind=receiver index=0 parent=def#14 vis=private span=208..212 origin=struct(item#4,[3, 1, 0])
+  def#16 name="main" kind=fn generics=[] sig=sig#2 body=body#1 parent=- vis=private span=243..247 origin=item#5
+  def#17 name="p" kind=local mutable=false ty=- body=body#1 parent=- vis=private span=256..257 origin=struct(item#5,[2, 0, 0])
+uses:
+  use#0 name="std" span=7..10 origin=struct(item#0,[0])
+  use#1 name="io" span=11..13 origin=struct(item#0,[1])
+  use#2 name="T" span=59..60 origin=struct(item#1,[1, 0, 0])
+  use#3 name="T" span=65..66 origin=struct(item#1,[2, 0, 0])
+  use#4 name="f64" span=97..100 origin=struct(item#2,[1, 0, 0])
+  use#5 name="T" span=152..153 origin=struct(item#3,[1, 0, 1, 0])
+  use#6 name="Show" span=173..177 origin=struct(item#4,[1, 0])
+  use#7 name="T" span=178..179 origin=struct(item#4,[1, 1, 0])
+  use#8 name="Point" span=185..190 origin=struct(item#4,[2, 0])
+  use#9 name="T" span=191..192 origin=struct(item#4,[2, 1, 0])
+  use#10 name="T" span=217..218 origin=struct(item#4,[3, 1, 1, 0])
+  use#11 name="self" span=221..225 origin=struct(expr#0,[0])
+  use#12 name="x" span=226..227 origin=struct(expr#1,[1])
+  use#13 name="p" span=256..257 origin=struct(item#5,[2, 0, 0])
+bodies:
+  body#0 stmts=[] tail=hir#1 origin=struct(item#4,[3, 2])
+  body#1 stmts=[hir#4] tail=- origin=struct(item#5,[2])
+nodes:
+  hir#0 expr path [use#11] span=221..225 origin=expr#0
+  hir#1 expr field base=hir#0 sel=unresolved use#12 span=221..227 origin=expr#1
+  hir#2 pat binding local=def#17 candidate=use#13 span=256..257 origin=struct(item#5,[2, 0, 0])
+  hir#3 expr lit int 1 Dec span=260..261 origin=expr#2
+  hir#4 stmt let pattern=hir#2 init=hir#3 span=252..262 origin=struct(item#5,[2, 0])
+types:
+  type#0 type path [use#2] generics=[] span=59..60 origin=struct(item#1,[1, 0])
+  type#1 type path [use#3] generics=[] span=65..66 origin=struct(item#1,[2, 0])
+  type#2 type path [use#4] generics=[] span=97..100 origin=struct(item#2,[1, 0])
+  type#3 type path [use#5] generics=[] span=152..153 origin=struct(item#3,[1, 0, 1])
+  type#4 type path [use#7] generics=[] span=178..179 origin=struct(item#4,[1, 1])
+  type#5 type path [use#6] generics=[type#4] span=173..180 origin=struct(item#4,[1])
+  type#6 type path [use#9] generics=[] span=191..192 origin=struct(item#4,[2, 1])
+  type#7 type path [use#8] generics=[type#6] span=185..193 origin=struct(item#4,[2])
+  type#8 type path [use#10] generics=[] span=217..218 origin=struct(item#4,[3, 1, 1])
+sigs:
+  sig#0 name=def#10 params=[def#11] ret=type#3 span=138..153
+  sig#1 name=def#14 params=[def#15] ret=type#8 span=203..218
+  sig#2 name=def#16 params=[] ret=- span=243..249

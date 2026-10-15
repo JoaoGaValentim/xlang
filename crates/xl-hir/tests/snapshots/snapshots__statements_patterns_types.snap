@@ -1,0 +1,68 @@
+---
+source: crates/xl-hir/tests/snapshots.rs
+expression: dump_module(&output.module)
+---
+module module#0 package package#0 file 0
+items:
+  item#0 kind=fn def=def#0 span=0..191 origin=item#0
+imports:
+defs:
+  def#0 name="f" kind=fn generics=[] sig=sig#0 body=body#0 parent=- vis=private span=3..4 origin=item#0
+  def#1 name="a" kind=param ty=type#0 index=0 parent=def#0 vis=private span=5..6 origin=struct(item#0,[1, 0])
+  def#2 name="b" kind=param ty=type#3 index=1 parent=def#0 vis=private span=13..14 origin=struct(item#0,[1, 1])
+  def#3 name="c" kind=param ty=type#5 index=2 parent=def#0 vis=private span=29..30 origin=struct(item#0,[1, 2])
+  def#4 name="d" kind=param ty=type#8 index=3 parent=def#0 vis=private span=42..43 origin=struct(item#0,[1, 3])
+  def#5 name="x" kind=local mutable=true ty=type#10 body=body#0 parent=- vis=private span=91..92 origin=struct(item#0,[2, 0, 0])
+  def#6 name="p" kind=local mutable=false ty=- body=body#0 parent=- vis=private span=124..125 origin=struct(item#0,[2, 1, 0, 0])
+  def#7 name="q" kind=local mutable=false ty=- body=body#0 parent=- vis=private span=127..128 origin=struct(item#0,[2, 1, 0, 1])
+uses:
+  use#0 name="i64" span=8..11 origin=struct(item#0,[1, 0, 0, 0])
+  use#1 name="i64" span=17..20 origin=struct(item#0,[1, 1, 0, 0, 0])
+  use#2 name="bool" span=22..26 origin=struct(item#0,[1, 1, 0, 1, 0])
+  use#3 name="i64" span=33..36 origin=struct(item#0,[1, 2, 0, 0, 0])
+  use#4 name="i64" span=48..51 origin=struct(item#0,[1, 3, 0, 0, 0])
+  use#5 name="bool" span=56..60 origin=struct(item#0,[1, 3, 0, 1, 0])
+  use#6 name="i64" span=65..68 origin=struct(item#0,[1, 4, 0])
+  use#7 name="i64" span=94..97 origin=struct(item#0,[2, 0, 1, 0])
+  use#8 name="x" span=91..92 origin=struct(item#0,[2, 0, 0])
+  use#9 name="a" span=100..101 origin=struct(expr#1,[0])
+  use#10 name="p" span=124..125 origin=struct(item#0,[2, 1, 0, 0])
+  use#11 name="q" span=127..128 origin=struct(item#0,[2, 1, 0, 1])
+  use#12 name="b" span=132..133 origin=struct(expr#4,[0])
+  use#13 name="p" span=153..154 origin=struct(expr#5,[0])
+bodies:
+  body#0 stmts=[hir#5,hir#10] tail=hir#18 origin=struct(item#0,[2])
+nodes:
+  hir#0 expr lit int 2 Dec span=38..39 origin=expr#0
+  hir#1 pat binding local=def#5 candidate=use#8 span=91..92 origin=struct(item#0,[2, 0, 0])
+  hir#2 expr path [use#9] span=100..101 origin=expr#1
+  hir#3 expr lit int 1 Dec span=104..105 origin=expr#2
+  hir#4 expr binary Add hir#2 hir#3 span=100..105 origin=expr#3
+  hir#5 stmt let pattern=hir#1 init=hir#4 span=83..106 origin=struct(item#0,[2, 0])
+  hir#6 pat binding local=def#6 candidate=use#10 span=124..125 origin=struct(item#0,[2, 1, 0, 0])
+  hir#7 pat binding local=def#7 candidate=use#11 span=127..128 origin=struct(item#0,[2, 1, 0, 1])
+  hir#8 pat tuple [hir#6,hir#7] span=123..129 origin=struct(item#0,[2, 1, 0])
+  hir#9 expr path [use#12] span=132..133 origin=expr#4
+  hir#10 stmt let pattern=hir#8 init=hir#9 span=119..134 origin=struct(item#0,[2, 1])
+  hir#11 expr path [use#13] span=153..154 origin=expr#5
+  hir#12 pat lit int 0 Dec span=157..158 origin=struct(expr#9,[1, 0])
+  hir#13 expr lit int 1 Dec span=162..163 origin=expr#6
+  hir#14 pat lit int 1 Dec span=165..166 origin=struct(expr#9,[2, 0])
+  hir#15 expr lit int 2 Dec span=170..171 origin=expr#7
+  hir#16 pat wildcard span=173..174 origin=struct(expr#9,[3, 0])
+  hir#17 expr lit int 3 Dec span=178..179 origin=expr#8
+  hir#18 expr match hir#11 [(hir#12 => hir#13),(hir#14 => hir#15),(hir#16 => hir#17)] span=147..181 origin=expr#9
+types:
+  type#0 type path [use#0] generics=[] span=8..11 origin=struct(item#0,[1, 0, 0])
+  type#1 type path [use#1] generics=[] span=17..20 origin=struct(item#0,[1, 1, 0, 0])
+  type#2 type path [use#2] generics=[] span=22..26 origin=struct(item#0,[1, 1, 0, 1])
+  type#3 type tuple [type#1,type#2] span=16..27 origin=struct(item#0,[1, 1, 0])
+  type#4 type path [use#3] generics=[] span=33..36 origin=struct(item#0,[1, 2, 0, 0])
+  type#5 type array elem=type#4 len=hir#0 span=32..40 origin=struct(item#0,[1, 2, 0])
+  type#6 type path [use#4] generics=[] span=48..51 origin=struct(item#0,[1, 3, 0, 0])
+  type#7 type path [use#5] generics=[] span=56..60 origin=struct(item#0,[1, 3, 0, 1])
+  type#8 type fn params=[type#6] ret=type#7 span=45..60 origin=struct(item#0,[1, 3, 0])
+  type#9 type path [use#6] generics=[] span=65..68 origin=struct(item#0,[1, 4])
+  type#10 type path [use#7] generics=[] span=94..97 origin=struct(item#0,[2, 0, 1])
+sigs:
+  sig#0 name=def#0 params=[def#1,def#2,def#3,def#4] ret=type#9 span=3..68
