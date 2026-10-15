@@ -1,0 +1,2 @@
+# Snapshot byte offsets require the canonical LF fixture on every OS.
+crates/xl-hir/tests/fixtures/spec_example.x text eol=lf

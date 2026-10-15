@@ -99,6 +99,7 @@ structural/synthesized keys. The ratified budgets are depth 256, nodes
 | HIR-003 / P1 | `xl-hir::validate`, signature arena completeness | Append a cloned, unreferenced `FnSig` with an invalid parameter `DefId(u32::MAX)`. **Red phase:** `validate()` returned `[]`; targeted test failed. Signatures were checked for spans only; no reachability or contained-reference traversal occurred. | Track visited signatures, reject orphan signatures, traverse their referenced params/return types, reject unknown signature owners; `orphaned_signature_with_invalid_parameter_is_rejected`. | Red reproduction recorded; complete HIR suite passes after correction; included in WP-A PR. |
 | HIR-004 / P1 | `xl-hir`, portable native-stack safety at ratified HIR depth | The original `deep_hand_built_expressions_are_poisoned_at_the_limit` test crashed on the Windows runner with `STATUS_STACK_OVERFLOW` (PR #8 initial CI run `38659704990`, Windows job `116177794199`). Reproduced on macOS with `RUST_MIN_STACK=1048576`, exiting with `SIGABRT`. Recursive lowering exhausted a 1-MiB stack before reaching the permitted 256-depth poison boundary. | Guard the bounded lowering and structural-validation traversals with conditional stack growth; run both 240-array valid lowering/validation and 300-array depth-poison cases inside an explicitly 1-MiB test thread on every platform. | Small-stack regression passed locally after correction; cross-platform recheck required on the updated PR. |
 | HIR-005 / P1 | `xl-hir`, ratified budgets must never be enlarged through public test overrides | Before correction, `lower_structure_with_limits` and `validate_with_limits` accepted caller-supplied values of `u32::MAX`; a 300-array AST bypassed the depth cutoff and overflowed the test stack. | Cap all four caller-provided limits to their ratified maxima at both public entry points. `explicit_limits_cannot_relax_the_ratified_depth_budget` reproduces the failure with an enlarged depth budget; `configurable_limits_can_tighten_but_never_expand_ratified_budgets` checks all four caps without allocating large arenas. | Depth regression passed locally after correction; new four-budget unit regression and final CI pending. |
+| HIR-006 / P2 | Deterministic snapshots require identical source bytes on all CI platforms | Windows run `38663676913` passed deep resource tests but failed `snapshot_specification_example`: CRLF checkout changed fixture offsets (`item#1 span=16..47` on LF versus `18..49` on CRLF) without altering HIR structure. | Add `.gitattributes` to pin `crates/xl-hir/tests/fixtures/spec_example.x` to LF and assert the fixture has no CR before lowering. Preserve production source handling and the original specification archive. | Windows CI verification pending on the updated checkout. |
 | DOC-001 / P3 | Repository status accuracy | `docs/phase-status.md`, `docs/roadmap.md` and `docs/architecture.md` retain an earlier statement that PR #7 is unmerged and HIR is not authorized, contrary to integrated `main` SHA `5eaa6ab` and Directive 011-R1. | Correct the current status to integrated architecture/authorized WP-A while retaining chronological historical acceptance records. | Documentation-only correction within the WP-A update, not a language-semantic change. |
 
 No unrelated Phase 0 or Phase 1 functional correction was needed, so no
@@ -207,6 +208,14 @@ complete resource suite passed locally after that change (7/7); a fresh
 Windows CI run remains mandatory. The exact overflowing frame in the
 original default-worker test was not captured by the CI logs, so whether
 it was lowering or destruction on that path remains unproven.
+
+The same updated Windows run `38663676913` subsequently passed the deep
+resource suite but exposed HIR-006, a cross-platform snapshot fixture
+normalization issue. A bounded `lower_hir` fuzz run on `0a1d20b` used the
+installed `nightly-2026-10-02` compiler and completed **16,282 executions in
+13 seconds**, no reported crash (601 MiB peak RSS). The initial fuzz attempt
+using pinned stable 1.99 failed before any execution because its `-Z`
+sanitizer flag requires nightly; those failed runs are not counted.
 
 **Dependency assessment.** `stacker` is pinned to exactly `0.1.25`; the
 lockfiles resolve `psm 0.1.32`. Its production dependency tree includes

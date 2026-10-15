@@ -68,7 +68,9 @@ fn snapshot_nested_desugarings() {
 
 #[test]
 fn snapshot_specification_example() {
-    let output = lower_ok(include_str!("fixtures/spec_example.x"));
+    let source = include_str!("fixtures/spec_example.x");
+    assert!(!source.contains('\r'), "snapshot fixture must retain LF line endings");
+    let output = lower_ok(source);
     insta::assert_snapshot!("spec_example", dump_module(&output.module));
 }
 
