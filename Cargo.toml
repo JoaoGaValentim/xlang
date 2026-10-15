@@ -28,3 +28,4 @@ xl-hir = { path = "crates/xl-hir" }
 unicode-ident = "1.0"
 insta = "1"
 proptest = "1"
+stacker = "=0.1.25"

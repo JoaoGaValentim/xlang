@@ -64,10 +64,44 @@ impl LowerLimits {
     pub const fn ratified() -> Self {
         Self::RATIFIED
     }
+
+    /// Test overrides may only tighten the owner-ratified budgets.
+    pub(crate) fn capped(self) -> Self {
+        Self {
+            max_hir_depth: self.max_hir_depth.min(MAX_HIR_DEPTH),
+            max_hir_nodes: self.max_hir_nodes.min(MAX_HIR_NODES),
+            max_defs: self.max_defs.min(MAX_DEFS),
+            max_uses: self.max_uses.min(MAX_USES),
+        }
+    }
 }
 
 impl Default for LowerLimits {
     fn default() -> Self {
         Self::RATIFIED
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configurable_limits_can_tighten_but_never_expand_ratified_budgets() {
+        let too_large = LowerLimits {
+            max_hir_depth: u32::MAX,
+            max_hir_nodes: u32::MAX,
+            max_defs: u32::MAX,
+            max_uses: u32::MAX,
+        };
+        assert_eq!(too_large.capped(), LowerLimits::RATIFIED);
+
+        let tightened = LowerLimits {
+            max_hir_depth: 32,
+            max_hir_nodes: 100,
+            max_defs: 10,
+            max_uses: 50,
+        };
+        assert_eq!(tightened.capped(), tightened);
     }
 }

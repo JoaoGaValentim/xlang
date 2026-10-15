@@ -113,7 +113,13 @@ pub fn validate(module: &HirModule) -> Vec<Violation> {
 /// Validates one module with explicit budgets.
 #[must_use]
 pub fn validate_with_limits(module: &HirModule, limits: LowerLimits) -> Vec<Violation> {
-    Validator::new(module, limits).run()
+    let limits = limits.capped();
+    // Validate the full ratified nesting budget even when called on a
+    // 1-MiB stack (notably Windows test threads). This also covers
+    // hand-built malformed HIR independent of the parser's lower bound.
+    stacker::maybe_grow(1536 * 1024, 8 * 1024 * 1024, || {
+        Validator::new(module, limits).run()
+    })
 }
 
 /// Validates a resolution side table against its module.

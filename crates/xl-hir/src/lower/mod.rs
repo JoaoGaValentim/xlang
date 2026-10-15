@@ -114,7 +114,15 @@ pub fn lower_structure_with_limits(
     package: PackageId,
     limits: LowerLimits,
 ) -> StructuralLowerOutput {
-    Lowerer::new(file, module, package, limits).run(items)
+    let limits = limits.capped();
+    // The ratified 256-node nesting budget is safe on the larger main
+    // stacks, but a 1-MiB Windows/test thread can overflow before the
+    // poison node is reached. Grow the stack for this bounded recursive
+    // traversal when the caller has insufficient remaining stack space.
+    // The language's nesting policy and deterministic output are unchanged.
+    stacker::maybe_grow(1536 * 1024, 8 * 1024 * 1024, || {
+        Lowerer::new(file, module, package, limits).run(items)
+    })
 }
 
 /// One body-lowering context: how pattern bindings are recorded.

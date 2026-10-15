@@ -236,3 +236,30 @@ fn at_most_one_depth_diagnostic_is_reported() {
         "HIR nesting limit (256) exceeded"
     );
 }
+
+#[test]
+fn explicit_limits_cannot_relax_the_ratified_depth_budget() {
+    // with_limits exists for tighter test budgets; it must never permit
+    // deeper user input than the owner-ratified 256-node bound.
+    let expanded = LowerLimits {
+        max_hir_depth: u32::MAX,
+        max_hir_nodes: u32::MAX,
+        max_defs: u32::MAX,
+        max_uses: u32::MAX,
+    };
+    let items = vec![common::deep_array_item("f", 0, 0, 300)];
+    let output = lower_structure_with_limits(
+        &items,
+        FILE,
+        ModuleId::from_index(0),
+        PackageId::from_index(0),
+        expanded,
+    );
+    assert_eq!(output.fate, StageFate::Complete);
+    assert_eq!(output.diagnostics.len(), 1);
+    assert_eq!(
+        output.diagnostics[0].message(),
+        "HIR nesting limit (256) exceeded"
+    );
+    assert!(validate_with_limits(&output.module, expanded).is_empty());
+}

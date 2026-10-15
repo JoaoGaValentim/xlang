@@ -192,21 +192,79 @@ fn empty_interpolations_survive_recovery() {
 
 #[test]
 fn deep_hand_built_expressions_are_poisoned_at_the_limit() {
-    // 300 nested arrays exceed MAX_HIR_DEPTH (256).
-    let items = vec![common::deep_array_item("f", 0, 0, 300)];
-    let output = xl_hir::lower_structure(
-        &items,
-        common::FILE,
-        xl_hir::ModuleId::from_index(0),
-        xl_hir::PackageId::from_index(0),
-    );
-    assert_eq!(output.fate, StageFate::Complete);
-    assert_eq!(output.diagnostics.len(), 1);
-    assert_eq!(
-        output.diagnostics[0].message(),
-        "HIR nesting limit (256) exceeded"
-    );
-    assert!(xl_hir::validate(&output.module).is_empty());
+    // Windows has 1-MiB default test threads. The original recursion
+    // overflowed the native stack before the ratified 256-depth cutoff.
+    // Use the same small-stack budget on every CI platform.
+    std::thread::Builder::new()
+        .stack_size(1024 * 1024)
+        .spawn(|| {
+            // A tail with N arrays surrounding one literal uses N+1
+            // counted HIR expression levels. N=255 is exactly the limit.
+            for depth in [64, 100, 128, 240, 255] {
+                let items = vec![common::deep_array_item("f", 0, 0, depth)];
+                let output = xl_hir::lower_structure(
+                    &items,
+                    common::FILE,
+                    xl_hir::ModuleId::from_index(0),
+                    xl_hir::PackageId::from_index(0),
+                );
+                assert_eq!(output.fate, StageFate::Complete, "depth={depth}");
+                assert!(output.diagnostics.is_empty(), "depth={depth}");
+                assert!(xl_hir::validate(&output.module).is_empty(), "depth={depth}");
+
+                if depth == 240 {
+                    // The validator must fail closed for deep, hand-built
+                    // references and cycles on the same 1-MiB thread.
+                    let mut cyclic = output.module.clone();
+                    let node = cyclic
+                        .nodes
+                        .nodes
+                        .iter_mut()
+                        .rfind(|node| matches!(node.kind, HirKind::Expr(ExprKind::Array(_))))
+                        .expect("array node");
+                    node.kind = HirKind::Expr(ExprKind::Array(vec![node.id]));
+                    assert!(xl_hir::validate(&cyclic).iter().any(|violation| {
+                        violation.kind == xl_hir::ViolationKind::CyclicReference
+                    }));
+
+                    let mut invalid = output.module.clone();
+                    let node = invalid
+                        .nodes
+                        .nodes
+                        .iter_mut()
+                        .rfind(|node| matches!(node.kind, HirKind::Expr(ExprKind::Array(_))))
+                        .expect("array node");
+                    node.kind =
+                        HirKind::Expr(ExprKind::Array(vec![xl_hir::HirId::from_index(u32::MAX)]));
+                    assert!(xl_hir::validate(&invalid).iter().any(|violation| {
+                        violation.kind == xl_hir::ViolationKind::IndexOutOfBounds
+                    }));
+                }
+                // Drop both the input AST and the arena HIR within the
+                // bounded test thread; the HIR has no recursive ownership.
+            }
+
+            for depth in [256, 257, 300, 1024] {
+                let items = vec![common::deep_array_item("f", 0, 0, depth)];
+                let output = xl_hir::lower_structure(
+                    &items,
+                    common::FILE,
+                    xl_hir::ModuleId::from_index(0),
+                    xl_hir::PackageId::from_index(0),
+                );
+                assert_eq!(output.fate, StageFate::Complete, "depth={depth}");
+                assert_eq!(output.diagnostics.len(), 1, "depth={depth}");
+                assert_eq!(
+                    output.diagnostics[0].message(),
+                    "HIR nesting limit (256) exceeded",
+                    "depth={depth}"
+                );
+                assert!(xl_hir::validate(&output.module).is_empty(), "depth={depth}");
+            }
+        })
+        .expect("create small-stack test thread")
+        .join()
+        .expect("deep lowering must not overflow a 1-MiB thread stack");
 }
 
 #[test]

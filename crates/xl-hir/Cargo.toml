@@ -12,6 +12,7 @@ publish.workspace = true
 xl-span.workspace = true
 xl-diag.workspace = true
 xl-ast.workspace = true
+stacker.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
