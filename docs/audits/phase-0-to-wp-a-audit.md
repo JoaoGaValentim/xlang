@@ -194,6 +194,20 @@ cyclic and out-of-range references within the deeply built arena. The
 `explicit_limits_cannot_relax_the_ratified_depth_budget` targeted regression
 also passed after capping the caller-specified limits.
 
+**Additional Windows CI finding:** runs `38663130532` and `38663294062`
+confirmed that the expanded `tests/errors.rs` test passed on Windows, but
+the two deep `tests/resource.rs` cases
+(`at_most_one_depth_diagnostic_is_reported` and
+`explicit_limits_cannot_relax_the_ratified_depth_budget`) still overflowed
+their default test-harness worker stacks. These failures are distinct from
+the originally failing `tests/errors.rs` regression. The resource cases now
+execute construction, lowering, validation and drop in explicitly sized
+1-MiB worker threads, as the passing error regression already did. The
+complete resource suite passed locally after that change (7/7); a fresh
+Windows CI run remains mandatory. The exact overflowing frame in the
+original default-worker test was not captured by the CI logs, so whether
+it was lowering or destruction on that path remains unproven.
+
 **Dependency assessment.** `stacker` is pinned to exactly `0.1.25`; the
 lockfiles resolve `psm 0.1.32`. Its production dependency tree includes
 `cfg-if 1.0.5`, `libc 0.2.190`, and `psm 0.1.32`; native build dependencies

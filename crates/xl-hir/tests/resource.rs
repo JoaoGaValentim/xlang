@@ -21,6 +21,17 @@ fn lower_with_limits(source: &str, limits: LowerLimits) -> xl_hir::StructuralLow
     )
 }
 
+/// Make the native-stack budget explicit for hand-built deep AST cases.
+/// Construction, lowering, validation, and destruction all run on this stack.
+fn with_one_mib_stack(test: impl FnOnce() + Send + 'static) {
+    std::thread::Builder::new()
+        .stack_size(1024 * 1024)
+        .spawn(test)
+        .expect("create 1-MiB HIR resource test thread")
+        .join()
+        .expect("HIR resource test must finish without a native-stack overflow");
+}
+
 #[test]
 fn node_budget_boundary_is_exact() {
     let source = "fn f() -> i64 { 1 + 2 }";
@@ -216,50 +227,55 @@ fn depth_budget_poisons_desugarings_consistently() {
 
 #[test]
 fn at_most_one_depth_diagnostic_is_reported() {
-    // Two independent over-deep chains in one module: the depth
-    // diagnostic is reported once per run (deterministic suppression).
-    let items = vec![
-        common::deep_array_item("a", 0, 0, 300),
-        common::deep_array_item("b", 1, 1000, 300),
-    ];
-    let output = lower_structure_with_limits(
-        &items,
-        FILE,
-        ModuleId::from_index(0),
-        PackageId::from_index(0),
-        LowerLimits::RATIFIED,
-    );
-    assert_eq!(output.fate, StageFate::Complete);
-    assert_eq!(output.diagnostics.len(), 1);
-    assert_eq!(
-        output.diagnostics[0].message(),
-        "HIR nesting limit (256) exceeded"
-    );
+    with_one_mib_stack(|| {
+        // Two independent over-deep chains in one module: the depth
+        // diagnostic is reported once per run (deterministic suppression).
+        let items = vec![
+            common::deep_array_item("a", 0, 0, 300),
+            common::deep_array_item("b", 1, 1000, 300),
+        ];
+        let output = lower_structure_with_limits(
+            &items,
+            FILE,
+            ModuleId::from_index(0),
+            PackageId::from_index(0),
+            LowerLimits::RATIFIED,
+        );
+        assert_eq!(output.fate, StageFate::Complete);
+        assert_eq!(output.diagnostics.len(), 1);
+        assert_eq!(
+            output.diagnostics[0].message(),
+            "HIR nesting limit (256) exceeded"
+        );
+        assert!(validate_with_limits(&output.module, LowerLimits::RATIFIED).is_empty());
+    });
 }
 
 #[test]
 fn explicit_limits_cannot_relax_the_ratified_depth_budget() {
-    // with_limits exists for tighter test budgets; it must never permit
-    // deeper user input than the owner-ratified 256-node bound.
-    let expanded = LowerLimits {
-        max_hir_depth: u32::MAX,
-        max_hir_nodes: u32::MAX,
-        max_defs: u32::MAX,
-        max_uses: u32::MAX,
-    };
-    let items = vec![common::deep_array_item("f", 0, 0, 300)];
-    let output = lower_structure_with_limits(
-        &items,
-        FILE,
-        ModuleId::from_index(0),
-        PackageId::from_index(0),
-        expanded,
-    );
-    assert_eq!(output.fate, StageFate::Complete);
-    assert_eq!(output.diagnostics.len(), 1);
-    assert_eq!(
-        output.diagnostics[0].message(),
-        "HIR nesting limit (256) exceeded"
-    );
-    assert!(validate_with_limits(&output.module, expanded).is_empty());
+    with_one_mib_stack(|| {
+        // with_limits exists for tighter test budgets; it must never permit
+        // deeper user input than the owner-ratified 256-node bound.
+        let expanded = LowerLimits {
+            max_hir_depth: u32::MAX,
+            max_hir_nodes: u32::MAX,
+            max_defs: u32::MAX,
+            max_uses: u32::MAX,
+        };
+        let items = vec![common::deep_array_item("f", 0, 0, 300)];
+        let output = lower_structure_with_limits(
+            &items,
+            FILE,
+            ModuleId::from_index(0),
+            PackageId::from_index(0),
+            expanded,
+        );
+        assert_eq!(output.fate, StageFate::Complete);
+        assert_eq!(output.diagnostics.len(), 1);
+        assert_eq!(
+            output.diagnostics[0].message(),
+            "HIR nesting limit (256) exceeded"
+        );
+        assert!(validate_with_limits(&output.module, expanded).is_empty());
+    });
 }
