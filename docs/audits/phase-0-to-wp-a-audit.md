@@ -213,7 +213,9 @@ initially reported an expected formatting difference in `tests/resource.rs`;
 mandatory workspace gates as a single logged process was blocked by the
 Codex tool safety-status check before a subprocess result was returned.
 Those four results therefore remain **UNVERIFIED on this final revision**;
-GitHub Actions must execute the updated commit before owner review. The
+the R2 CI workflow adds `cargo build --workspace --locked` to the three OS
+jobs so all four required commands are covered by the published CI. GitHub
+Actions must execute the updated commit before owner review. The
 previously recorded 613 test passes and 25,114 fuzz executions apply to
 earlier local revisions and are not counted as final-revision evidence.
 
