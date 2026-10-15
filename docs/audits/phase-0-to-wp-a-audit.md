@@ -286,3 +286,87 @@ Only the project owner may merge the WP-A PR. WP-B requires its integration,
 passing Format/Ubuntu/macOS/Windows CI, and a separate owner authorization.
 The pre-WP-B gate includes confirmation that no name resolution, graph
 validation, type checking or `xc check` has been smuggled into WP-A.
+
+## Directive 011-R3 — final structural-validator soundness gate
+
+**Starting HEAD:** `a46065d6714c8ab671d059a48abc348f8e51b89f`.
+**Corrective commit:** `d5c8306` (`fix(hir): reject orphaned definitions and context-skipped ownership paths`).
+The existing PR #8 remains the sole integration proposal; owner merge is prohibited at this gate.
+
+### V-1: definition reachability and ownership
+
+**Confirmed defect.** Previously `walk_roots` treated every unvisited
+definition as a new root without issuing a violation. Consequently complete,
+well-indexed, but disconnected top-level items, locals, parameters, generics,
+and struct fields passed validation. The four first negative regressions
+(`v1_orphaned_top_level_item_is_rejected`, `v1_orphaned_local_is_rejected`,
+`v1_orphaned_parameter_and_generic_are_rejected`, and
+`v1_valid_parent_without_owner_edge_is_rejected`) all failed with an empty
+violation list on the original validator. They pass with the correction.
+
+`walk_roots` now reports `UnreachableArenaEntry` for every definition not
+reached through an owning item, definition edge, or binding pattern. It still
+walks disconnected definitions to diagnose malformed references. `walk_def`
+follows pattern-local ownership; `walk_owned_def` checks exact parent identity
+for fields, variants, trait items, generics and signature parameters. The
+signature checker also rejects a non-parameter in the parameter list. A
+pattern binding must reference a local definition. Additional passing negative
+tests cover a field whose `parent` denotes a different valid struct and a
+receiver missing from its signature.
+
+**Accepted representation exceptions:** an `impl` has no method-ID list,
+so `Method.parent = impl DefId` is the documented direct owner link;
+methods with a reachable impl and a matching signature are traversed as valid.
+Local definitions use `Local.body` metadata and a binding pattern as their
+declaration link. Legitimate desugaring-generated locals and the accepted
+module/block item slot representation remain valid.
+
+### V-2: multiple structural paths and validation context
+
+**Confirmed defect.** A globally visited node/body could silently bypass its
+second ownership path, including a loop target that is valid in only the
+first path. The original validator failed five cause-specific regressions:
+shared expression siblings, shared body, a node under two loops, a break
+reused outside its enclosing loop, and a signature referenced by a second
+definition. The signature and break cases already produced an incidental
+unreachable-entry diagnostic, but lacked the direct ownership violation.
+All regressions now pass, including the additional `continue` case.
+
+For **nodes, bodies, and signatures**, second owning traversal edges report
+`MultipleStructuralOwners`; active recursive references continue to report
+`CyclicReference`. A nested item may appear in both `HirModule.items` and a
+`StmtKind::Item` for its one declaration; this valid alias is handled once,
+while two item slots introducing the same definition are rejected. Repeated
+definition ownership edges also report `MultipleStructuralOwners`.
+
+**Type references can be deliberately shared** between bindings lowered from
+one annotated destructuring pattern, per the existing `Local.ty` layout.
+Thus type references use context-aware validation: record the greatest
+effective depth checked for each type ID and traverse it again only when
+reached at a deeper depth. An isolated negative test verifies that a child
+under a shared type cannot escape `DepthExceeded` through an earlier shallow
+visit. The ratified maximum of 256 bounds per-type rechecks; active flags
+still reject cycles. No HIR ownership or origin contract changed.
+
+### R3 verification and residual risk
+
+- Red phase: 4/4 V-1 negative tests failed (`[]`); 5/5 initial V-2
+  ownership-negative tests failed to produce the expected direct violation.
+- Green phase: `validate_negative` **41/41**; `coverage_items` **10/10**;
+  complete `cargo test --workspace` **629 passed, 0 failed, 0 ignored**
+  across 65 groups on macOS.
+- `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+  and `cargo build --workspace --locked` all **PASS**.
+- Explicit 1-MiB thread stack regression, ratified-budget suite (7/7),
+  and `spec_example_end_to_end_conformance` all **PASS**.
+- Bounded `lower_hir` fuzzing on installed nightly with address sanitizer:
+  **19,347 executions in 16 s**, 0 crashes, 89 new units.
+- Previous R2 cross-platform baseline: CI run `38664341782` passed Format,
+  Ubuntu (615), macOS (615), Windows (613) at its then-published SHA.
+  The R3 final SHA requires its **own four successful jobs** before merge.
+
+Unproven, nonblocking risks: extreme synthetic Phase 1 token-ID collision
+behavior lacks a reproducible defect; native stack growth remains
+platform-dependent outside the tested runner set; fuzzing is bounded and is
+not an exhaustive proof. No parser, lowering, desugaring, ADR-0005, or original
+specification was changed. WP-B, `xl-types`, and `xc check` remain excluded.
