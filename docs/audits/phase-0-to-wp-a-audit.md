@@ -348,19 +348,37 @@ under a shared type cannot escape `DepthExceeded` through an earlier shallow
 visit. The ratified maximum of 256 bounds per-type rechecks; active flags
 still reject cycles. No HIR ownership or origin contract changed.
 
+An additional **red/green positive regression** exposed a false rejection
+in the first R3 fix: different-depth bindings sharing an array annotation
+legitimately revisit the length expression subtree under the same owner.
+That subtree is now checked at the deeper context without treating the
+revisit as a second owner. The new regression initially failed with
+`MultipleStructuralOwners` and now passes. The final correction records each
+length-expression node's original array `TypeRefId` owner; only a revisit of
+that same annotation may bypass the duplicate-owner check. Rechecking a
+different array annotation cannot inherit this exception. Two additional
+negative regressions reject sharing a length expression with a body tail or
+with a second array annotation. This preserves legitimate generated reuse
+without weakening global node or cycle checks.
+
 ### R3 verification and residual risk
 
 - Red phase: 4/4 V-1 negative tests failed (`[]`); 5/5 initial V-2
   ownership-negative tests failed to produce the expected direct violation.
-- Green phase: `validate_negative` **41/41**; `coverage_items` **10/10**;
-  complete `cargo test --workspace` **629 passed, 0 failed, 0 ignored**
-  across 65 groups on macOS.
+- Green phase before the final array-annotation refinement:
+  `validate_negative` **41/41**; workspace **629 passed, 0 failed**.
+  After the final refinement: `validate_negative` **44/44**;
+  `coverage_items` **10/10**; complete workspace **632 passed, 0 failed,
+  0 ignored** across 65 groups on macOS. The final published head still
+  requires its own four-job CI gate.
 - `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
   and `cargo build --workspace --locked` all **PASS**.
 - Explicit 1-MiB thread stack regression, ratified-budget suite (7/7),
   and `spec_example_end_to_end_conformance` all **PASS**.
 - Bounded `lower_hir` fuzzing on installed nightly with address sanitizer:
-  **19,347 executions in 16 s**, 0 crashes, 89 new units.
+  earlier **19,347 executions in 16 s**, 0 crashes, 89 new units;
+  final refinement **12,886 executions in 11 s**, 0 crashes,
+  42 new units.
 - Previous R2 cross-platform baseline: CI run `38664341782` passed Format,
   Ubuntu (615), macOS (615), Windows (613) at its then-published SHA.
   The R3 final SHA requires its **own four successful jobs** before merge.

@@ -201,6 +201,9 @@ struct Validator<'a> {
     limits: LowerLimits,
     violations: Vec<Violation>,
     visited_nodes: Vec<bool>,
+    // The first array-length annotation that structurally owns each node.
+    // A recheck may reuse only nodes originally reached through that owner.
+    node_array_length_owners: Vec<Option<TypeRefId>>,
     visited_bodies: Vec<bool>,
     visited_types: Vec<bool>,
     // Syntactic type references may legitimately be reused (e.g. an
@@ -213,6 +216,10 @@ struct Validator<'a> {
     active_bodies: Vec<bool>,
     active_types: Vec<bool>,
     active_defs: Vec<bool>,
+    // Revalidating a shared syntactic array type at a greater depth also
+    // revisits its own length-expression subtree.
+    array_length_owner: Option<TypeRefId>,
+    rechecking_array_length: bool,
 }
 
 impl<'a> Validator<'a> {
@@ -222,6 +229,7 @@ impl<'a> Validator<'a> {
             limits,
             violations: Vec::new(),
             visited_nodes: vec![false; module.nodes.nodes.len()],
+            node_array_length_owners: vec![None; module.nodes.nodes.len()],
             visited_bodies: vec![false; module.bodies.bodies.len()],
             visited_types: vec![false; module.types.types.len()],
             type_checked_depth: vec![None; module.types.types.len()],
@@ -231,6 +239,8 @@ impl<'a> Validator<'a> {
             active_bodies: vec![false; module.bodies.bodies.len()],
             active_types: vec![false; module.types.types.len()],
             active_defs: vec![false; module.defs.defs.len()],
+            array_length_owner: None,
+            rechecking_array_length: false,
         }
     }
 
@@ -1122,7 +1132,11 @@ impl<'a> Validator<'a> {
             );
             return;
         }
-        if self.visited_nodes[index] {
+        if self.visited_nodes[index]
+            && !(self.rechecking_array_length
+                && self.array_length_owner.is_some()
+                && self.node_array_length_owners[index] == self.array_length_owner)
+        {
             self.violation(
                 ViolationKind::MultipleStructuralOwners,
                 Some(self.module.nodes.nodes[index].span),
@@ -1141,6 +1155,7 @@ impl<'a> Validator<'a> {
         };
         if poison {
             self.visited_nodes[index] = true;
+            self.node_array_length_owners[index] = self.array_length_owner;
             if let HirKind::Stmt(StmtKind::Expr(inner)) = kind {
                 self.walk_node(*inner, Expect::Expr, parent_depth, loops);
             }
@@ -1159,6 +1174,9 @@ impl<'a> Validator<'a> {
             return;
         }
         self.visited_nodes[index] = true;
+        if !self.rechecking_array_length {
+            self.node_array_length_owners[index] = self.array_length_owner;
+        }
         self.active_nodes[index] = true;
         match kind {
             HirKind::Expr(kind) => self.walk_expr(id, kind, my_depth, loops),
@@ -1347,6 +1365,7 @@ impl<'a> Validator<'a> {
         if self.type_checked_depth[index].is_some_and(|depth| depth >= my_depth) {
             return;
         }
+        let revisiting = self.visited_types[index];
         self.type_checked_depth[index] = Some(my_depth);
         self.visited_types[index] = true;
         self.active_types[index] = true;
@@ -1369,7 +1388,13 @@ impl<'a> Validator<'a> {
             TypeRefKind::Array { elem, len } => {
                 self.walk_type(elem, my_depth);
                 let mut loops = Vec::new();
+                let previous_owner = self.array_length_owner;
+                let previous_rechecking = self.rechecking_array_length;
+                self.array_length_owner = Some(id);
+                self.rechecking_array_length = revisiting;
                 self.walk_node(len, Expect::Expr, my_depth, &mut loops);
+                self.array_length_owner = previous_owner;
+                self.rechecking_array_length = previous_rechecking;
             }
             TypeRefKind::Fn { params, ret } => {
                 for param in params {

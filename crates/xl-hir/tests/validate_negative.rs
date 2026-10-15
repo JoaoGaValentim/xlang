@@ -825,3 +825,56 @@ fn v1_v2_compiler_generated_shared_annotations_stay_valid() {
     let output = lower_ok("fn f() { let (a, b): (i32, i32) = (1, 2); a }");
     assert!(validate(&output.module).is_empty());
 }
+
+#[test]
+fn v2_shared_array_length_annotation_with_uneven_binding_depth_stays_valid() {
+    let output = lower_ok("fn f() { let (a, (b, c)): [i32; 3] = (1, (2, 3)); a }");
+    assert!(validate(&output.module).is_empty());
+}
+
+#[test]
+fn v2_rechecked_array_length_cannot_share_with_body_expression() {
+    let mut output = lower_ok("fn f() { let (a, (b, c)): [i32; 3] = (1, (2, 3)); a }");
+    let length = output
+        .module
+        .types
+        .types
+        .iter()
+        .find_map(|ty| match ty.kind {
+            TypeRefKind::Array { len, .. } => Some(len),
+            _ => None,
+        })
+        .expect("shared array type");
+    let f = common::def_named(&output.module, "f");
+    let DefKind::Fn {
+        body: Some(root), ..
+    } = f.kind
+    else {
+        panic!()
+    };
+    output.module.bodies.bodies[root.index() as usize].tail = Some(length);
+    assert_violation(&output.module, ViolationKind::MultipleStructuralOwners);
+}
+
+#[test]
+fn v2_distinct_array_annotations_cannot_share_length_expression() {
+    let mut output = lower_ok("fn f() { let a: [i32; 3] = [1, 2, 3]; let b: [i32; 4] = [4]; b }");
+    let arrays: Vec<_> = output
+        .module
+        .types
+        .types
+        .iter()
+        .filter_map(|ty| match ty.kind {
+            TypeRefKind::Array { len, .. } => Some((ty.id, len)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(arrays.len(), 2);
+    let TypeRefKind::Array { ref mut len, .. } =
+        output.module.types.types[arrays[1].0.index() as usize].kind
+    else {
+        panic!()
+    };
+    *len = arrays[0].1;
+    assert_violation(&output.module, ViolationKind::MultipleStructuralOwners);
+}
