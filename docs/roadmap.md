@@ -17,7 +17,7 @@ implementation.
 | --- | --- | --- | --- | --- |
 | 0 | Foundation (*Fundação*) | 1–2 weeks | Workspace, CI, initial specification | ACCEPTED — integrated via PR #1 (merge `4d82106`); see `docs/phase-status.md` |
 | 1 | Lexical and syntactic frontend (*Frontend léxico e sintático*) | 3–4 weeks | `xc parse arquivo.x` prints the AST | ACCEPTED — integrated via PR #6 (merge `210e1e0`); formal acceptance via Directive 010 (2026-10-14); see the closure record in `docs/phase-status.md` |
-| 2 | Name resolution and types (*Resolução de nomes e tipos*) | 6–8 weeks | `xc check` with precise type errors | DESIGN GATE — design package under `docs/proposals/phase-2/` owner-ratified (Directive 010-R3; ADR-0005), pending integration (PR #7 unmerged); implementation not authorized |
+| 2 | Name resolution and types (*Resolução de nomes e tipos*) | 6–8 weeks | `xc check` with precise type errors | WP-A IN PROGRESS — ADR-0005 integrated (PR #7; `5eaa6ab`); structural HIR authorized by Directive 011-R1, pending owner review; WP-B/C/D not authorized |
 | 3 | MIR | 3–4 weeks | `xc mir` prints the CFG | NOT STARTED |
 | 4 | Bytecode VM (*VM de bytecode*) | 4–6 weeks | `xc run hello.x` executes programs | NOT STARTED |
 | 5 | Complete language (*Linguagem completa*) | 8–10 weeks | structs, enums, match, traits, generics | NOT STARTED |
@@ -71,20 +71,23 @@ integration CI run [38490165826](https://github.com/JoaoGaValentim/xlang/actions
 passed on all four jobs. The full closure record is in
 `docs/phase-status.md`.
 
-## Phase 2 — Name resolution and type system — DESIGN GATE
+## Phase 2 — Architectural contract accepted; WP-A in progress
 
 The design package under `docs/proposals/phase-2/` (architecture RFC, HIR,
 lowering/desugaring, name resolution, type system, traits and
 exhaustiveness, diagnostics, conformance plan, decision packet, and
 consistency review) is **owner-ratified** by Engineering Directive 010-R3
-(2026-10-14; ADR-0005) and is **pending integration** — PR #7 is open and
-unmerged, so it is not yet part of `main`. The package is documentation
-only: no `xl-hir`, `xl-types`, resolution, type checking, or `xc check`
-implementation exists or is authorized. The package's own documents
-supersede the generic phase description below where they are more
-specific.
+(2026-10-14; ADR-0005) and was **integrated** by PR #7 (merge `5eaa6ab`).
+Directive 011-R1 authorized recovery, audit, and implementation of WP-A
+(structural HIR). The recovered `xl-hir` is under review on
+`phase/2-hir-foundation`; WP-B name resolution/import validation, WP-C type
+checking and WP-D `xc check` are not authorized. The ratified design package
+supersedes generic milestone descriptions where more specific.
 
-Scope and deliverables (original §6):
+The following is the historical Phase 1 plan (original §6); it remains
+here as an archival reference rather than active Phase 2 work.
+
+Scope and deliverables (original §6, Phase 1):
 
 - Complete lexer: Unicode, literals, nested comments, interpolated strings.
 - Recursive-descent + Pratt parser for every construction of the grammar
@@ -100,12 +103,12 @@ the lexer/parser (no panics); the property `parse(print(ast)) == ast`.
 Acceptance criteria (original §6): 100% of the specification examples parse;
 1 hour of fuzzing without failures.
 
-Dependencies: Phase 0 accepted (satisfied). The Phase 1 contracts are
-ratified (Directive 006; ADR-0004) and the implementation directives were
-issued (Directives 006–009). Remaining before closure: the CLI Pull
-Request merge and the project owner's formal acceptance decision.
+Dependencies: Phase 0 accepted (satisfied). The Phase 1 contracts were
+ratified (Directive 006; ADR-0004); the implementation directives were
+issued (Directives 006–009); the CLI PR #6 was merged, and Phase 1 was
+formally accepted by the owner through Directive 010.
 
-## Phase 2 — Name resolution and type system — NOT STARTED
+## Phase 2 — Original milestone scope (WP-B/C/D deferred)
 
 Scope and deliverables (original §6):
 

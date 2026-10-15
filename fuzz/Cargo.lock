@@ -102,6 +102,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "xl-hir"
+version = "0.1.0"
+dependencies = [
+ "xl-ast",
+ "xl-diag",
+ "xl-span",
+]
+
+[[package]]
 name = "xl-lexer"
 version = "0.1.0"
 dependencies = [
@@ -130,6 +139,7 @@ version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
  "xl-ast",
+ "xl-hir",
  "xl-lexer",
  "xl-parser",
  "xl-span",

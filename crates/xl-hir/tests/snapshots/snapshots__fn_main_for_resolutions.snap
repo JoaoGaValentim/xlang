@@ -1,0 +1,18 @@
+---
+source: crates/xl-hir/tests/snapshots.rs
+expression: "dump_resolutions(&output.module, &output.resolutions)"
+---
+resolutions:
+  use#0 name="__state" -> def def#1
+  use#1 name="__state" -> def def#1
+  use#2 name="__pair" -> def def#2
+  use#3 name="__item" -> def def#3
+  use#4 name="__next" -> def def#4
+  use#5 name="x" -> unresolved Pending
+  use#6 name="__item" -> def def#3
+  use#7 name="__state" -> def def#1
+  use#8 name="__next" -> def def#4
+  use#9 name="x" -> unresolved Pending
+  use#10 name="__pair" -> def def#2
+  use#11 name="Some" -> internal OptionSome
+  use#12 name="None" -> internal OptionNone

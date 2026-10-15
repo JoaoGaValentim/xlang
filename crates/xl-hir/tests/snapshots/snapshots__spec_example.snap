@@ -1,0 +1,267 @@
+---
+source: crates/xl-hir/tests/snapshots.rs
+expression: dump_module(&output.module)
+---
+module module#0 package package#0 file 0
+items:
+  item#0 kind=import def=def#0 span=0..14 origin=item#0
+  item#1 kind=struct def=def#1 span=16..47 origin=item#1
+  item#2 kind=impl def=def#4 span=49..207 origin=item#2
+  item#3 kind=enum def=def#8 span=209..251 origin=item#3
+  item#4 kind=fn def=def#11 span=253..382 origin=item#4
+  item#5 kind=fn def=def#13 span=384..497 origin=item#5
+  item#6 kind=fn def=def#15 span=499..614 origin=item#6
+imports:
+  import item=item#0 binding=def#0 path=[use#0,use#1] span=0..14
+defs:
+  def#0 name="io" kind=module-binding path=[std,io] alias=- target=unresolved parent=- vis=private span=11..13 origin=struct(item#0,[1])
+  def#1 name="Point" kind=struct generics=[] fields=[def#2,def#3] parent=- vis=private span=23..28 origin=item#1
+  def#2 name="x" kind=field ty=type#0 parent=def#1 vis=private span=31..32 origin=struct(item#1,[1])
+  def#3 name="y" kind=field ty=type#1 parent=def#1 vis=private span=39..40 origin=struct(item#1,[2])
+  def#4 name="" kind=impl generics=[] trait=- self_ty=type#2 inherent=true parent=- vis=private span=49..207 origin=item#2
+  def#5 name="dist" kind=method generics=[] sig=sig#0 body=body#0 parent=def#4 vis=pub span=73..77 origin=struct(item#2,[3])
+  def#6 name="self" kind=receiver index=0 parent=def#5 vis=private span=78..82 origin=struct(item#2,[3, 1, 0])
+  def#7 name="o" kind=param ty=type#3 index=1 parent=def#5 vis=private span=84..85 origin=struct(item#2,[3, 1, 1])
+  def#8 name="Shape" kind=enum generics=[] variants=[def#9,def#10] parent=- vis=private span=214..219 origin=item#3
+  def#9 name="Circle" kind=variant payload=[type#5] parent=def#8 vis=private span=222..228 origin=struct(item#3,[1])
+  def#10 name="Rect" kind=variant payload=[type#6,type#7] parent=def#8 vis=private span=235..239 origin=struct(item#3,[2])
+  def#11 name="area" kind=fn generics=[] sig=sig#1 body=body#1 parent=- vis=private span=256..260 origin=item#4
+  def#12 name="s" kind=param ty=type#8 index=0 parent=def#11 vis=private span=261..262 origin=struct(item#4,[1, 0])
+  def#13 name="parse" kind=fn generics=[] sig=sig#2 body=body#2 parent=- vis=private span=387..392 origin=item#5
+  def#14 name="s" kind=param ty=type#10 index=0 parent=def#13 vis=private span=393..394 origin=struct(item#5,[1, 0])
+  def#15 name="main" kind=fn generics=[] sig=sig#3 body=body#5 parent=- vis=private span=502..506 origin=item#6
+  def#16 name="dx" kind=local mutable=false ty=- body=body#0 parent=- vis=private span=115..117 origin=struct(item#2,[3, 2, 0, 0])
+  def#17 name="dy" kind=local mutable=false ty=- body=body#0 parent=- vis=private span=146..148 origin=struct(item#2,[3, 2, 1, 0])
+  def#18 name="r" kind=local mutable=false ty=- body=body#1 parent=- vis=private span=316..317 origin=struct(expr#28,[1, 0, 2])
+  def#19 name="w" kind=local mutable=false ty=- body=body#1 parent=- vis=private span=359..360 origin=struct(expr#28,[2, 0, 2])
+  def#20 name="h" kind=local mutable=false ty=- body=body#1 parent=- vis=private span=362..363 origin=struct(expr#28,[2, 0, 3])
+  def#21 name="n" kind=local mutable=false ty=- body=body#2 parent=- vis=private span=431..432 origin=struct(item#5,[2, 0, 0])
+  def#22 name="__v" kind=local mutable=false ty=- body=body#2 parent=- vis=private span=435..446 origin=synth(try,expr#32,exp0,occ0)
+  def#23 name="__e" kind=local mutable=false ty=- body=body#2 parent=- vis=private span=435..446 origin=synth(try,expr#32,exp0,occ7)
+  def#24 name="total" kind=local mutable=true ty=- body=body#5 parent=- vis=private span=523..528 origin=struct(item#6,[2, 0, 0])
+  def#25 name="__state" kind=local mutable=true ty=- body=body#6 parent=- vis=private span=540..577 origin=synth(for,expr#52,exp0,occ1)
+  def#26 name="__pair" kind=local mutable=false ty=- body=body#8 parent=- vis=private span=540..577 origin=synth(for,expr#52,exp0,occ11)
+  def#27 name="__item" kind=local mutable=false ty=- body=body#8 parent=- vis=private span=540..577 origin=synth(for,expr#52,exp0,occ12)
+  def#28 name="__next" kind=local mutable=false ty=- body=body#8 parent=- vis=private span=540..577 origin=synth(for,expr#52,exp0,occ13)
+  def#29 name="i" kind=local mutable=false ty=- body=body#8 parent=- vis=private span=544..545 origin=struct(expr#52,[0])
+uses:
+  use#0 name="std" span=7..10 origin=struct(item#0,[0])
+  use#1 name="io" span=11..13 origin=struct(item#0,[1])
+  use#2 name="f64" span=34..37 origin=struct(item#1,[1, 0, 0])
+  use#3 name="f64" span=42..45 origin=struct(item#1,[2, 0, 0])
+  use#4 name="Point" span=54..59 origin=struct(item#2,[2, 0])
+  use#5 name="Point" span=87..92 origin=struct(item#2,[3, 1, 1, 0, 0])
+  use#6 name="f64" span=97..100 origin=struct(item#2,[3, 1, 2, 0])
+  use#7 name="f64" span=229..232 origin=struct(item#3,[1, 0, 0])
+  use#8 name="f64" span=240..243 origin=struct(item#3,[2, 0, 0])
+  use#9 name="f64" span=245..248 origin=struct(item#3,[2, 1, 0])
+  use#10 name="Shape" span=264..269 origin=struct(item#4,[1, 0, 0, 0])
+  use#11 name="f64" span=274..277 origin=struct(item#4,[1, 1, 0])
+  use#12 name="str" span=396..399 origin=struct(item#5,[1, 0, 0, 0])
+  use#13 name="Result" span=404..410 origin=struct(item#5,[1, 1, 0])
+  use#14 name="i64" span=411..414 origin=struct(item#5,[1, 1, 1, 0])
+  use#15 name="str" span=416..419 origin=struct(item#5,[1, 1, 2, 0])
+  use#16 name="dx" span=115..117 origin=struct(item#2,[3, 2, 0, 0])
+  use#17 name="self" span=120..124 origin=struct(expr#0,[0])
+  use#18 name="x" span=125..126 origin=struct(expr#1,[1])
+  use#19 name="o" span=129..130 origin=struct(expr#2,[0])
+  use#20 name="x" span=131..132 origin=struct(expr#3,[1])
+  use#21 name="dy" span=146..148 origin=struct(item#2,[3, 2, 1, 0])
+  use#22 name="self" span=151..155 origin=struct(expr#5,[0])
+  use#23 name="y" span=156..157 origin=struct(expr#6,[1])
+  use#24 name="o" span=160..161 origin=struct(expr#7,[0])
+  use#25 name="y" span=162..163 origin=struct(expr#8,[1])
+  use#26 name="dx" span=174..176 origin=struct(expr#10,[0])
+  use#27 name="dx" span=179..181 origin=struct(expr#11,[0])
+  use#28 name="dy" span=184..186 origin=struct(expr#13,[0])
+  use#29 name="dy" span=189..191 origin=struct(expr#14,[0])
+  use#30 name="sqrt" span=193..197 origin=struct(expr#17,[1])
+  use#31 name="s" span=290..291 origin=struct(expr#19,[0])
+  use#32 name="Shape" span=302..307 origin=struct(expr#28,[1, 0, 0])
+  use#33 name="Circle" span=309..315 origin=struct(expr#28,[1, 0, 1])
+  use#34 name="r" span=316..317 origin=struct(expr#28,[1, 0, 2])
+  use#35 name="r" span=332..333 origin=struct(expr#21,[0])
+  use#36 name="r" span=336..337 origin=struct(expr#23,[0])
+  use#37 name="Shape" span=347..352 origin=struct(expr#28,[2, 0, 0])
+  use#38 name="Rect" span=354..358 origin=struct(expr#28,[2, 0, 1])
+  use#39 name="w" span=359..360 origin=struct(expr#28,[2, 0, 2])
+  use#40 name="h" span=362..363 origin=struct(expr#28,[2, 0, 3])
+  use#41 name="w" span=368..369 origin=struct(expr#25,[0])
+  use#42 name="h" span=372..373 origin=struct(expr#26,[0])
+  use#43 name="n" span=431..432 origin=struct(item#5,[2, 0, 0])
+  use#44 name="s" span=435..436 origin=struct(expr#29,[0])
+  use#45 name="to_int" span=437..443 origin=struct(expr#30,[1])
+  use#46 name="Ok" span=435..446 origin=synth(try,expr#32,exp0,occ1)
+  use#47 name="__v" span=435..446 origin=synth(try,expr#32,exp0,occ2)
+  use#48 name="__v" span=435..446 origin=synth(try,expr#32,exp0,occ5)
+  use#49 name="Err" span=435..446 origin=synth(try,expr#32,exp0,occ8)
+  use#50 name="__e" span=435..446 origin=synth(try,expr#32,exp0,occ9)
+  use#51 name="Err" span=435..446 origin=synth(try,expr#32,exp0,occ12)
+  use#52 name="__e" span=435..446 origin=synth(try,expr#32,exp0,occ14)
+  use#53 name="n" span=455..456 origin=struct(expr#33,[0])
+  use#54 name="Err" span=463..466 origin=struct(expr#36,[0])
+  use#55 name="Ok" span=488..490 origin=struct(expr#39,[0])
+  use#56 name="n" span=491..492 origin=struct(expr#40,[0])
+  use#57 name="total" span=523..528 origin=struct(item#6,[2, 0, 0])
+  use#58 name="__state" span=540..577 origin=synth(for,expr#52,exp0,occ2)
+  use#59 name="__state" span=540..577 origin=synth(for,expr#52,exp0,occ7)
+  use#60 name="__pair" span=540..577 origin=synth(for,expr#52,exp0,occ14)
+  use#61 name="__item" span=540..577 origin=synth(for,expr#52,exp0,occ16)
+  use#62 name="__next" span=540..577 origin=synth(for,expr#52,exp0,occ18)
+  use#63 name="i" span=544..545 origin=struct(expr#52,[0])
+  use#64 name="__item" span=540..577 origin=synth(for,expr#52,exp0,occ22)
+  use#65 name="__state" span=540..577 origin=synth(for,expr#52,exp0,occ25)
+  use#66 name="__next" span=540..577 origin=synth(for,expr#52,exp0,occ27)
+  use#67 name="total" span=557..562 origin=struct(expr#48,[0])
+  use#68 name="i" span=566..567 origin=struct(expr#49,[0])
+  use#69 name="f64" span=571..574 origin=struct(expr#50,[1, 0])
+  use#70 name="__pair" span=540..577 origin=synth(for,expr#52,exp0,occ33)
+  use#71 name="Some" span=540..577 origin=synth(for,expr#52,exp0,occ35)
+  use#72 name="None" span=540..577 origin=synth(for,expr#52,exp0,occ38)
+  use#73 name="io" span=582..584 origin=struct(expr#53,[0])
+  use#74 name="println" span=585..592 origin=struct(expr#54,[1])
+  use#75 name="total" span=603..608 origin=struct(expr#55,[0])
+bodies:
+  body#0 stmts=[hir#6,hir#13] tail=hir#22 origin=struct(item#2,[3, 2])
+  body#1 stmts=[] tail=hir#37 origin=struct(item#4,[2])
+  body#2 stmts=[hir#52] tail=hir#63 origin=struct(item#5,[2])
+  body#3 stmts=[] tail=hir#58 origin=struct(expr#43,[1])
+  body#4 stmts=[] tail=hir#61 origin=struct(expr#42,[0])
+  body#5 stmts=[hir#66,hir#102,hir#110] tail=- origin=struct(item#6,[2])
+  body#6 stmts=[hir#71] tail=hir#72 origin=synth(for,expr#52,exp0,occ0)
+  body#7 stmts=[hir#100] tail=- origin=synth(for,expr#52,exp0,occ6)
+  body#8 stmts=[hir#79,hir#82,hir#86,hir#93] tail=- origin=synth(for,expr#52,exp0,occ10)
+  body#9 stmts=[hir#91] tail=- origin=struct(expr#52,[2])
+nodes:
+  hir#0 pat binding local=def#16 candidate=use#16 span=115..117 origin=struct(item#2,[3, 2, 0, 0])
+  hir#1 expr path [use#17] span=120..124 origin=expr#0
+  hir#2 expr field base=hir#1 sel=unresolved use#18 span=120..126 origin=expr#1
+  hir#3 expr path [use#19] span=129..130 origin=expr#2
+  hir#4 expr field base=hir#3 sel=unresolved use#20 span=129..132 origin=expr#3
+  hir#5 expr binary Sub hir#2 hir#4 span=120..132 origin=expr#4
+  hir#6 stmt let pattern=hir#0 init=hir#5 span=111..133 origin=struct(item#2,[3, 2, 0])
+  hir#7 pat binding local=def#17 candidate=use#21 span=146..148 origin=struct(item#2,[3, 2, 1, 0])
+  hir#8 expr path [use#22] span=151..155 origin=expr#5
+  hir#9 expr field base=hir#8 sel=unresolved use#23 span=151..157 origin=expr#6
+  hir#10 expr path [use#24] span=160..161 origin=expr#7
+  hir#11 expr field base=hir#10 sel=unresolved use#25 span=160..163 origin=expr#8
+  hir#12 expr binary Sub hir#9 hir#11 span=151..163 origin=expr#9
+  hir#13 stmt let pattern=hir#7 init=hir#12 span=142..164 origin=struct(item#2,[3, 2, 1])
+  hir#14 expr path [use#26] span=174..176 origin=expr#10
+  hir#15 expr path [use#27] span=179..181 origin=expr#11
+  hir#16 expr binary Mul hir#14 hir#15 span=174..181 origin=expr#12
+  hir#17 expr path [use#28] span=184..186 origin=expr#13
+  hir#18 expr path [use#29] span=189..191 origin=expr#14
+  hir#19 expr binary Mul hir#17 hir#18 span=184..191 origin=expr#15
+  hir#20 expr binary Add hir#16 hir#19 span=174..191 origin=expr#16
+  hir#21 expr field base=hir#20 sel=unresolved use#30 span=174..197 origin=expr#17
+  hir#22 expr call callee=hir#21 args=[] span=174..199 origin=expr#18
+  hir#23 expr path [use#31] span=290..291 origin=expr#19
+  hir#24 pat binding local=def#18 candidate=use#34 span=316..317 origin=struct(expr#28,[1, 0, 2])
+  hir#25 pat variant path=[use#32,use#33] args=[hir#24] span=302..318 origin=struct(expr#28,[1, 0])
+  hir#26 expr lit float 3.14159 span=322..329 origin=expr#20
+  hir#27 expr path [use#35] span=332..333 origin=expr#21
+  hir#28 expr binary Mul hir#26 hir#27 span=322..333 origin=expr#22
+  hir#29 expr path [use#36] span=336..337 origin=expr#23
+  hir#30 expr binary Mul hir#28 hir#29 span=322..337 origin=expr#24
+  hir#31 pat binding local=def#19 candidate=use#39 span=359..360 origin=struct(expr#28,[2, 0, 2])
+  hir#32 pat binding local=def#20 candidate=use#40 span=362..363 origin=struct(expr#28,[2, 0, 3])
+  hir#33 pat variant path=[use#37,use#38] args=[hir#31,hir#32] span=347..364 origin=struct(expr#28,[2, 0])
+  hir#34 expr path [use#41] span=368..369 origin=expr#25
+  hir#35 expr path [use#42] span=372..373 origin=expr#26
+  hir#36 expr binary Mul hir#34 hir#35 span=368..373 origin=expr#27
+  hir#37 expr match hir#23 [(hir#25 => hir#30),(hir#33 => hir#36)] span=284..380 origin=expr#28
+  hir#38 pat binding local=def#21 candidate=use#43 span=431..432 origin=struct(item#5,[2, 0, 0])
+  hir#39 expr path [use#44] span=435..436 origin=expr#29
+  hir#40 expr field base=hir#39 sel=unresolved use#45 span=435..443 origin=expr#30
+  hir#41 expr call callee=hir#40 args=[] span=435..445 origin=expr#31
+  hir#42 pat binding local=def#22 candidate=use#47 span=435..446 origin=synth(try,expr#32,exp0,occ3)
+  hir#43 pat variant path=[use#46] args=[hir#42] span=435..446 origin=synth(try,expr#32,exp0,occ4)
+  hir#44 expr path [use#48] span=435..446 origin=synth(try,expr#32,exp0,occ6)
+  hir#45 pat binding local=def#23 candidate=use#50 span=435..446 origin=synth(try,expr#32,exp0,occ10)
+  hir#46 pat variant path=[use#49] args=[hir#45] span=435..446 origin=synth(try,expr#32,exp0,occ11)
+  hir#47 expr path [use#51] span=435..446 origin=synth(try,expr#32,exp0,occ13)
+  hir#48 expr path [use#52] span=435..446 origin=synth(try,expr#32,exp0,occ15)
+  hir#49 expr call callee=hir#47 args=[hir#48] span=435..446 origin=synth(try,expr#32,exp0,occ16)
+  hir#50 expr return hir#49 span=435..446 origin=synth(try,expr#32,exp0,occ17)
+  hir#51 expr match hir#41 [(hir#43 => hir#44),(hir#46 => hir#50)] span=435..446 origin=synth(try,expr#32,exp0,occ18)
+  hir#52 stmt let pattern=hir#38 init=hir#51 span=427..447 origin=struct(item#5,[2, 0])
+  hir#53 expr path [use#53] span=455..456 origin=expr#33
+  hir#54 expr lit int 0 Dec span=459..460 origin=expr#34
+  hir#55 expr binary Lt hir#53 hir#54 span=455..460 origin=expr#35
+  hir#56 expr path [use#54] span=463..466 origin=expr#36
+  hir#57 expr lit str "negativo" span=467..477 origin=expr#37
+  hir#58 expr call callee=hir#56 args=[hir#57] span=463..478 origin=expr#38
+  hir#59 expr path [use#55] span=488..490 origin=expr#39
+  hir#60 expr path [use#56] span=491..492 origin=expr#40
+  hir#61 expr call callee=hir#59 args=[hir#60] span=488..493 origin=expr#41
+  hir#62 expr block body#4 span=486..495 origin=expr#42
+  hir#63 expr if cond=hir#55 then=body#3 else=hir#62 span=452..495 origin=expr#43
+  hir#64 pat binding local=def#24 candidate=use#57 span=523..528 origin=struct(item#6,[2, 0, 0])
+  hir#65 expr lit float 0.0 span=531..534 origin=expr#44
+  hir#66 stmt let pattern=hir#64 init=hir#65 span=515..535 origin=struct(item#6,[2, 0])
+  hir#67 expr lit int 0 Dec span=549..550 origin=expr#45
+  hir#68 expr lit int 10 Dec span=552..554 origin=expr#46
+  hir#69 expr builtin RangeNew [hir#67,hir#68] span=549..554 origin=expr#47
+  hir#70 pat binding local=def#25 candidate=use#58 span=540..577 origin=synth(for,expr#52,exp0,occ3)
+  hir#71 stmt let pattern=hir#70 init=hir#69 span=540..577 origin=synth(for,expr#52,exp0,occ4)
+  hir#72 expr loop body#7 span=540..577 origin=synth(for,expr#52,exp0,occ5)
+  hir#73 expr path [use#59] span=540..577 origin=synth(for,expr#52,exp0,occ8)
+  hir#74 expr builtin RangeNext [hir#73] span=540..577 origin=synth(for,expr#52,exp0,occ9)
+  hir#75 expr path [use#60] span=540..577 origin=synth(for,expr#52,exp0,occ15)
+  hir#76 pat binding local=def#27 candidate=use#61 span=540..577 origin=synth(for,expr#52,exp0,occ17)
+  hir#77 pat binding local=def#28 candidate=use#62 span=540..577 origin=synth(for,expr#52,exp0,occ19)
+  hir#78 pat tuple [hir#76,hir#77] span=540..577 origin=synth(for,expr#52,exp0,occ20)
+  hir#79 stmt let pattern=hir#78 init=hir#75 span=540..577 origin=synth(for,expr#52,exp0,occ21)
+  hir#80 pat binding local=def#29 candidate=use#63 span=544..545 origin=struct(expr#52,[0])
+  hir#81 expr path [use#64] span=540..577 origin=synth(for,expr#52,exp0,occ23)
+  hir#82 stmt let pattern=hir#80 init=hir#81 span=540..577 origin=synth(for,expr#52,exp0,occ24)
+  hir#83 expr path [use#65] span=540..577 origin=synth(for,expr#52,exp0,occ26)
+  hir#84 expr path [use#66] span=540..577 origin=synth(for,expr#52,exp0,occ28)
+  hir#85 expr assign Assign hir#83 hir#84 span=540..577 origin=synth(for,expr#52,exp0,occ29)
+  hir#86 stmt expr hir#85 span=540..577 origin=synth(for,expr#52,exp0,occ30)
+  hir#87 expr path [use#67] span=557..562 origin=expr#48
+  hir#88 expr path [use#68] span=566..567 origin=expr#49
+  hir#89 expr cast hir#88 as type#14 span=566..574 origin=expr#50
+  hir#90 expr assign AddAssign hir#87 hir#89 span=557..574 origin=expr#51
+  hir#91 stmt expr hir#90 span=557..575 origin=struct(expr#52,[2, 0])
+  hir#92 expr block body#9 span=540..577 origin=synth(for,expr#52,exp0,occ31)
+  hir#93 stmt expr hir#92 span=540..577 origin=synth(for,expr#52,exp0,occ32)
+  hir#94 pat binding local=def#26 candidate=use#70 span=540..577 origin=synth(for,expr#52,exp0,occ34)
+  hir#95 pat variant path=[use#71] args=[hir#94] span=540..577 origin=synth(for,expr#52,exp0,occ36)
+  hir#96 expr block body#8 span=540..577 origin=synth(for,expr#52,exp0,occ37)
+  hir#97 pat variant path=[use#72] args=[] span=540..577 origin=synth(for,expr#52,exp0,occ39)
+  hir#98 expr break target=hir#72 span=540..577 origin=synth(for,expr#52,exp0,occ40)
+  hir#99 expr match hir#74 [(hir#95 => hir#96),(hir#97 => hir#98)] span=540..577 origin=synth(for,expr#52,exp0,occ41)
+  hir#100 stmt expr hir#99 span=540..577 origin=synth(for,expr#52,exp0,occ42)
+  hir#101 expr block body#6 span=540..577 origin=synth(for,expr#52,exp0,occ43)
+  hir#102 stmt expr hir#101 span=540..577 origin=struct(item#6,[2, 1])
+  hir#103 expr path [use#73] span=582..584 origin=expr#53
+  hir#104 expr field base=hir#103 sel=unresolved use#74 span=582..592 origin=expr#54
+  hir#105 expr lit str "total = " span=594..602 origin=synth(interpolation,expr#56,exp0,occ0)
+  hir#106 expr path [use#75] span=603..608 origin=expr#55
+  hir#107 expr builtin FormatPrim [hir#106] span=603..608 origin=synth(interpolation,expr#56,exp0,occ1)
+  hir#108 expr builtin StrConcat [hir#105,hir#107] span=593..610 origin=synth(interpolation,expr#56,exp0,occ2)
+  hir#109 expr call callee=hir#104 args=[hir#108] span=582..611 origin=expr#57
+  hir#110 stmt expr hir#109 span=582..612 origin=struct(item#6,[2, 2])
+types:
+  type#0 type path [use#2] generics=[] span=34..37 origin=struct(item#1,[1, 0])
+  type#1 type path [use#3] generics=[] span=42..45 origin=struct(item#1,[2, 0])
+  type#2 type path [use#4] generics=[] span=54..59 origin=struct(item#2,[2])
+  type#3 type path [use#5] generics=[] span=87..92 origin=struct(item#2,[3, 1, 1, 0])
+  type#4 type path [use#6] generics=[] span=97..100 origin=struct(item#2,[3, 1, 2])
+  type#5 type path [use#7] generics=[] span=229..232 origin=struct(item#3,[1, 0])
+  type#6 type path [use#8] generics=[] span=240..243 origin=struct(item#3,[2, 0])
+  type#7 type path [use#9] generics=[] span=245..248 origin=struct(item#3,[2, 1])
+  type#8 type path [use#10] generics=[] span=264..269 origin=struct(item#4,[1, 0, 0])
+  type#9 type path [use#11] generics=[] span=274..277 origin=struct(item#4,[1, 1])
+  type#10 type path [use#12] generics=[] span=396..399 origin=struct(item#5,[1, 0, 0])
+  type#11 type path [use#14] generics=[] span=411..414 origin=struct(item#5,[1, 1, 1])
+  type#12 type path [use#15] generics=[] span=416..419 origin=struct(item#5,[1, 1, 2])
+  type#13 type path [use#13] generics=[type#11,type#12] span=404..420 origin=struct(item#5,[1, 1])
+  type#14 type path [use#69] generics=[] span=571..574 origin=struct(expr#50,[1])
+sigs:
+  sig#0 name=def#5 params=[def#6,def#7] ret=type#4 span=73..100
+  sig#1 name=def#11 params=[def#12] ret=type#9 span=256..277
+  sig#2 name=def#13 params=[def#14] ret=type#13 span=387..420
+  sig#3 name=def#15 params=[] ret=- span=502..508

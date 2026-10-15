@@ -13,6 +13,7 @@ xl-lexer = { path = "../crates/xl-lexer" }
 xl-span = { path = "../crates/xl-span" }
 xl-parser = { path = "../crates/xl-parser" }
 xl-ast = { path = "../crates/xl-ast" }
+xl-hir = { path = "../crates/xl-hir" }
 
 [[bin]]
 name = "lex_tokens"
@@ -24,6 +25,13 @@ bench = false
 [[bin]]
 name = "lex_parse"
 path = "fuzz_targets/lex_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lower_hir"
+path = "fuzz_targets/lower_hir.rs"
 test = false
 doc = false
 bench = false

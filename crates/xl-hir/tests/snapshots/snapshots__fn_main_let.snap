@@ -1,0 +1,24 @@
+---
+source: crates/xl-hir/tests/snapshots.rs
+expression: dump_module(&output.module)
+---
+module module#0 package package#0 file 0
+items:
+  item#0 kind=fn def=def#0 span=0..26 origin=item#0
+imports:
+defs:
+  def#0 name="main" kind=fn generics=[] sig=sig#0 body=body#0 parent=- vis=private span=3..7 origin=item#0
+  def#1 name="x" kind=local mutable=false ty=- body=body#0 parent=- vis=private span=16..17 origin=struct(item#0,[2, 0, 0])
+uses:
+  use#0 name="x" span=16..17 origin=struct(item#0,[2, 0, 0])
+  use#1 name="x" span=23..24 origin=struct(expr#1,[0])
+bodies:
+  body#0 stmts=[hir#2] tail=hir#3 origin=struct(item#0,[2])
+nodes:
+  hir#0 pat binding local=def#1 candidate=use#0 span=16..17 origin=struct(item#0,[2, 0, 0])
+  hir#1 expr lit int 1 Dec span=20..21 origin=expr#0
+  hir#2 stmt let pattern=hir#0 init=hir#1 span=12..22 origin=struct(item#0,[2, 0])
+  hir#3 expr path [use#1] span=23..24 origin=expr#1
+types:
+sigs:
+  sig#0 name=def#0 params=[] ret=- span=3..9

@@ -1,0 +1,24 @@
+[package]
+name = "xl-hir"
+description = "High-level intermediate representation and structural lowering for the XLANG compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+xl-span.workspace = true
+xl-diag.workspace = true
+xl-ast.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+proptest.workspace = true
+# Dev-only: the lowering suites run the real Phase 1 frontend
+# (lexer + parser) so recovered ASTs, resource inputs, and the archived
+# specification example are exercised end to end. Production code has no
+# parser dependency (`xl-hir → xl-ast, xl-span, xl-diag` only).
+xl-lexer = { path = "../xl-lexer" }
+xl-parser = { path = "../xl-parser" }

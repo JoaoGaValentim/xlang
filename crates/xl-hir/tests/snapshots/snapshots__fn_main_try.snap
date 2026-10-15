@@ -1,0 +1,45 @@
+---
+source: crates/xl-hir/tests/snapshots.rs
+expression: dump_module(&output.module)
+---
+module module#0 package package#0 file 0
+items:
+  item#0 kind=fn def=def#0 span=0..29 origin=item#0
+imports:
+defs:
+  def#0 name="main" kind=fn generics=[] sig=sig#0 body=body#0 parent=- vis=private span=3..7 origin=item#0
+  def#1 name="x" kind=local mutable=false ty=- body=body#0 parent=- vis=private span=16..17 origin=struct(item#0,[2, 0, 0])
+  def#2 name="__v" kind=local mutable=false ty=- body=body#0 parent=- vis=private span=20..24 origin=synth(try,expr#2,exp0,occ0)
+  def#3 name="__e" kind=local mutable=false ty=- body=body#0 parent=- vis=private span=20..24 origin=synth(try,expr#2,exp0,occ7)
+uses:
+  use#0 name="x" span=16..17 origin=struct(item#0,[2, 0, 0])
+  use#1 name="f" span=20..21 origin=struct(expr#0,[0])
+  use#2 name="Ok" span=20..24 origin=synth(try,expr#2,exp0,occ1)
+  use#3 name="__v" span=20..24 origin=synth(try,expr#2,exp0,occ2)
+  use#4 name="__v" span=20..24 origin=synth(try,expr#2,exp0,occ5)
+  use#5 name="Err" span=20..24 origin=synth(try,expr#2,exp0,occ8)
+  use#6 name="__e" span=20..24 origin=synth(try,expr#2,exp0,occ9)
+  use#7 name="Err" span=20..24 origin=synth(try,expr#2,exp0,occ12)
+  use#8 name="__e" span=20..24 origin=synth(try,expr#2,exp0,occ14)
+  use#9 name="x" span=26..27 origin=struct(expr#3,[0])
+bodies:
+  body#0 stmts=[hir#13] tail=hir#14 origin=struct(item#0,[2])
+nodes:
+  hir#0 pat binding local=def#1 candidate=use#0 span=16..17 origin=struct(item#0,[2, 0, 0])
+  hir#1 expr path [use#1] span=20..21 origin=expr#0
+  hir#2 expr call callee=hir#1 args=[] span=20..23 origin=expr#1
+  hir#3 pat binding local=def#2 candidate=use#3 span=20..24 origin=synth(try,expr#2,exp0,occ3)
+  hir#4 pat variant path=[use#2] args=[hir#3] span=20..24 origin=synth(try,expr#2,exp0,occ4)
+  hir#5 expr path [use#4] span=20..24 origin=synth(try,expr#2,exp0,occ6)
+  hir#6 pat binding local=def#3 candidate=use#6 span=20..24 origin=synth(try,expr#2,exp0,occ10)
+  hir#7 pat variant path=[use#5] args=[hir#6] span=20..24 origin=synth(try,expr#2,exp0,occ11)
+  hir#8 expr path [use#7] span=20..24 origin=synth(try,expr#2,exp0,occ13)
+  hir#9 expr path [use#8] span=20..24 origin=synth(try,expr#2,exp0,occ15)
+  hir#10 expr call callee=hir#8 args=[hir#9] span=20..24 origin=synth(try,expr#2,exp0,occ16)
+  hir#11 expr return hir#10 span=20..24 origin=synth(try,expr#2,exp0,occ17)
+  hir#12 expr match hir#2 [(hir#4 => hir#5),(hir#7 => hir#11)] span=20..24 origin=synth(try,expr#2,exp0,occ18)
+  hir#13 stmt let pattern=hir#0 init=hir#12 span=12..25 origin=struct(item#0,[2, 0])
+  hir#14 expr path [use#9] span=26..27 origin=expr#3
+types:
+sigs:
+  sig#0 name=def#0 params=[] ret=- span=3..9

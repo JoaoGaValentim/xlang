@@ -496,6 +496,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "xl-hir"
+version = "0.1.0"
+dependencies = [
+ "insta",
+ "proptest",
+ "xl-ast",
+ "xl-diag",
+ "xl-lexer",
+ "xl-parser",
+ "xl-span",
+]
+
+[[package]]
 name = "xl-lexer"
 version = "0.1.0"
 dependencies = [

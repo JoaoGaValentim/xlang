@@ -3,13 +3,13 @@
 ```text
 CURRENT_PHASE: 2
 PHASE_NAME:    Name Resolution and Type System
-STATUS:        DESIGN GATE — OWNER-RATIFIED, PENDING INTEGRATION
+STATUS:        WP-A HIR FOUNDATION — IMPLEMENTATION UNDER REVIEW
                Phase 1: ACCEPTED (Engineering Directive 010, 2026-10-14)
                Phase 2: design package under docs/proposals/phase-2/ is
                OWNER-RATIFIED (Engineering Directive 010-R3, 2026-10-14;
-               ADR-0005) but PENDING INTEGRATION into main (PR #7 open,
-               unmerged). No Phase 2 implementation is authorized; no
-               production code exists beyond Phase 1.
+               ADR-0005) and INTEGRATED into main (PR #7 merged,
+               merge 5eaa6ab). Directive 011-R1 authorizes WP-A HIR
+               implementation and recovery; WP-B/C/D remain unauthorized.
 ```
 
 A phase may transition to `APPROVED` only after all required acceptance
@@ -341,10 +341,11 @@ history.
   **owner-ratified** by Engineering Directive 010-R3 (2026-10-14;
   ADR-0005): Category A `P2D-A1`…`A8` and Category B `P2D-B1`…`B20`,
   `P2D-B22`. Category C remains deferred; PD-009/PD-010 remain open. The
-  design is **pending integration** — PR #7 is open and unmerged, so it is
-  not yet part of `main`. No `xl-hir`, `xl-types`, resolution, or
-  `xc check` implementation exists or is authorized; ratification does not
-  authorize implementation. The end-user milestone remains
+  design was integrated by PR #7 (merge `5eaa6ab`). Directive 011-R1
+  subsequently authorized recovery and implementation of Phase 2 WP-A,
+  structural HIR only. WP-A remains pending its own review and merge;
+  resolution (WP-B), type checking (WP-C), and `xc check` (WP-D) are not
+  authorized. The end-user Phase 2 milestone remains
   `xc check program.x` (SPECIFIED §6 Phase 2).
 - CLI exit codes are a documented command contract: `0` success, `1`
   lexical/syntactic source errors, `2` usage/I/O/internal errors (CLI
