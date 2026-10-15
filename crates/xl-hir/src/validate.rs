@@ -85,6 +85,8 @@ pub enum ViolationKind {
     CyclicReference,
     /// An arena entry cannot be reached from any module item or definition.
     UnreachableArenaEntry,
+    /// A structural identity is used by distinct owning positions.
+    MultipleStructuralOwners,
 }
 
 /// A structural violation with its location and message.
@@ -201,6 +203,10 @@ struct Validator<'a> {
     visited_nodes: Vec<bool>,
     visited_bodies: Vec<bool>,
     visited_types: Vec<bool>,
+    // Syntactic type references may legitimately be reused (e.g. an
+    // annotation shared by several bindings). Revisit only when the
+    // effective depth grows; this is bounded by the ratified depth cap.
+    type_checked_depth: Vec<Option<u32>>,
     visited_sigs: Vec<bool>,
     visited_defs: Vec<bool>,
     active_nodes: Vec<bool>,
@@ -218,6 +224,7 @@ impl<'a> Validator<'a> {
             visited_nodes: vec![false; module.nodes.nodes.len()],
             visited_bodies: vec![false; module.bodies.bodies.len()],
             visited_types: vec![false; module.types.types.len()],
+            type_checked_depth: vec![None; module.types.types.len()],
             visited_sigs: vec![false; module.sigs.sigs.len()],
             visited_defs: vec![false; module.defs.defs.len()],
             active_nodes: vec![false; module.nodes.nodes.len()],
@@ -514,7 +521,15 @@ impl<'a> Validator<'a> {
     }
 
     fn check_items(&mut self) {
+        let mut owners = HashSet::new();
         for item in &self.module.items {
+            if !owners.insert(item.def) {
+                self.violation(
+                    ViolationKind::MultipleStructuralOwners,
+                    Some(item.span),
+                    format!("definition {} belongs to more than one item slot", item.def),
+                );
+            }
             let def = self.module.defs.get(item.def);
             let consistent = match (item.kind, def) {
                 (_, None) => false,
@@ -766,7 +781,32 @@ impl<'a> Validator<'a> {
             self.walk_item(item_id, 0);
         }
         for def_index in 0..self.module.defs.defs.len() {
+            // Impl methods are declared by their parent link: unlike trait
+            // items there is no separate method list in DefKind::Impl.
+            let def = &self.module.defs.defs[def_index];
+            if matches!(def.kind, DefKind::Method { .. })
+                && def.parent.is_some_and(|parent| {
+                    self.visited_defs.get(parent.index() as usize).copied() == Some(true)
+                        && matches!(
+                            self.module.defs.get(parent).map(|d| &d.kind),
+                            Some(DefKind::Impl { .. })
+                        )
+                })
+                && !self.visited_defs[def_index]
+            {
+                self.walk_def(DefId::from_index(def_index as u32), 0);
+            }
+        }
+        for def_index in 0..self.module.defs.defs.len() {
             if !self.visited_defs[def_index] {
+                let def = &self.module.defs.defs[def_index];
+                self.violation(
+                    ViolationKind::UnreachableArenaEntry,
+                    Some(def.span),
+                    format!("definition def#{def_index} has no reachable structural owner"),
+                );
+                // Examine references in the orphan without accepting the
+                // definition itself as an additional module root.
                 self.walk_def(DefId::from_index(def_index as u32), 0);
             }
         }
@@ -816,7 +856,7 @@ impl<'a> Validator<'a> {
                     Some(self.module.sigs.sigs[index].span),
                     format!("signature sig#{index} is not reachable from a module root"),
                 );
-                self.walk_signature(FnSigId::from_index(index as u32), &[], 0);
+                self.walk_signature(FnSigId::from_index(index as u32), None, 0);
             }
         }
     }
@@ -831,7 +871,29 @@ impl<'a> Validator<'a> {
             return;
         };
         let def = item.def;
+        // Nested item slots occur in the module table and also at their
+        // statement site. Both refer to the same declaration, legitimately.
+        // Duplicate item-slot owners are checked separately in check_items.
+        if self.visited_defs.get(def.index() as usize) == Some(&true) {
+            return;
+        }
         self.walk_def(def, parent_depth);
+    }
+
+    fn walk_owned_def(&mut self, id: DefId, owner: DefId, parent_depth: u32) {
+        if let Some(def) = self.module.def(id)
+            && def.parent != Some(owner)
+        {
+            self.violation(
+                ViolationKind::ParentKindMismatch,
+                Some(def.span),
+                format!(
+                    "definition {id} is owned by {owner} but records {:?}",
+                    def.parent
+                ),
+            );
+        }
+        self.walk_def(id, parent_depth);
     }
 
     /// Walks one definition. Items and definitions are structural glue and
@@ -855,6 +917,11 @@ impl<'a> Validator<'a> {
             return;
         }
         if self.visited_defs[index] {
+            self.violation(
+                ViolationKind::MultipleStructuralOwners,
+                Some(self.module.defs.defs[index].span),
+                format!("definition {id} is referenced by multiple structural owners"),
+            );
             return;
         }
         self.visited_defs[index] = true;
@@ -872,29 +939,29 @@ impl<'a> Validator<'a> {
                 sig,
                 body,
             } => {
-                self.walk_generics(&generics, parent_depth);
-                self.walk_signature(sig, &generics, parent_depth);
+                self.walk_generics(&generics, id, parent_depth);
+                self.walk_signature(sig, Some(id), parent_depth);
                 if let Some(body) = body {
                     let mut loops = Vec::new();
                     self.walk_body(body, parent_depth, &mut loops);
                 }
             }
             DefKind::Struct { generics, fields } => {
-                self.walk_generics(&generics, parent_depth);
+                self.walk_generics(&generics, id, parent_depth);
                 for field in fields {
-                    self.walk_def(field, parent_depth);
+                    self.walk_owned_def(field, id, parent_depth);
                 }
             }
             DefKind::Enum { generics, variants } => {
-                self.walk_generics(&generics, parent_depth);
+                self.walk_generics(&generics, id, parent_depth);
                 for variant in variants {
-                    self.walk_def(variant, parent_depth);
+                    self.walk_owned_def(variant, id, parent_depth);
                 }
             }
             DefKind::Trait { generics, items } => {
-                self.walk_generics(&generics, parent_depth);
+                self.walk_generics(&generics, id, parent_depth);
                 for item in items {
-                    self.walk_def(item, parent_depth);
+                    self.walk_owned_def(item, id, parent_depth);
                 }
             }
             DefKind::Impl {
@@ -903,7 +970,7 @@ impl<'a> Validator<'a> {
                 self_ty,
                 ..
             } => {
-                self.walk_generics(&generics, parent_depth);
+                self.walk_generics(&generics, id, parent_depth);
                 if let Some(trait_ref) = trait_ref {
                     self.walk_type(trait_ref, parent_depth);
                 }
@@ -918,7 +985,7 @@ impl<'a> Validator<'a> {
                 self.walk_type(ty, parent_depth);
             }
             DefKind::TraitItem { sig } => {
-                self.walk_signature(sig, &[], parent_depth);
+                self.walk_signature(sig, Some(id), parent_depth);
             }
             DefKind::GenericParam { bound } => {
                 if let Some(bound) = bound {
@@ -939,14 +1006,13 @@ impl<'a> Validator<'a> {
         self.active_defs[index] = false;
     }
 
-    fn walk_generics(&mut self, generics: &[DefId], parent_depth: u32) {
+    fn walk_generics(&mut self, generics: &[DefId], owner: DefId, parent_depth: u32) {
         for generic in generics {
-            self.walk_def(*generic, parent_depth);
+            self.walk_owned_def(*generic, owner, parent_depth);
         }
     }
 
-    fn walk_signature(&mut self, sig: FnSigId, generics: &[DefId], parent_depth: u32) {
-        let _ = generics;
+    fn walk_signature(&mut self, sig: FnSigId, expected_owner: Option<DefId>, parent_depth: u32) {
         let index = sig.index() as usize;
         let Some(signature) = self.module.sig(sig) else {
             self.violation(
@@ -956,7 +1022,23 @@ impl<'a> Validator<'a> {
             );
             return;
         };
+        if let Some(owner) = expected_owner
+            && signature.name != owner
+        {
+            self.violation(
+                ViolationKind::MultipleStructuralOwners,
+                Some(signature.span),
+                format!("signature {sig} belongs to {}, not {owner}", signature.name),
+            );
+        }
         if self.visited_sigs[index] {
+            if expected_owner.is_some() {
+                self.violation(
+                    ViolationKind::MultipleStructuralOwners,
+                    Some(signature.span),
+                    format!("signature {sig} has multiple structural owners"),
+                );
+            }
             return;
         }
         self.visited_sigs[index] = true;
@@ -970,7 +1052,16 @@ impl<'a> Validator<'a> {
         let params = signature.params.clone();
         let ret = signature.ret;
         for param in params {
-            self.walk_def(param, parent_depth);
+            if let Some(def) = self.module.def(param)
+                && !matches!(def.kind, DefKind::Param { .. } | DefKind::Receiver { .. })
+            {
+                self.violation(
+                    ViolationKind::KindMismatch,
+                    Some(def.span),
+                    format!("signature {sig} contains non-parameter definition {param}"),
+                );
+            }
+            self.walk_owned_def(param, signature.name, parent_depth);
         }
         if let Some(ret) = ret {
             self.walk_type(ret, parent_depth);
@@ -996,6 +1087,11 @@ impl<'a> Validator<'a> {
             return;
         }
         if self.visited_bodies[index] {
+            self.violation(
+                ViolationKind::MultipleStructuralOwners,
+                None,
+                format!("body {id} has multiple structural owners"),
+            );
             return;
         }
         self.visited_bodies[index] = true;
@@ -1017,6 +1113,23 @@ impl<'a> Validator<'a> {
         let Some(kind) = self.node(id, expect, None) else {
             return;
         };
+        let index = id.index() as usize;
+        if self.active_nodes[index] {
+            self.violation(
+                ViolationKind::CyclicReference,
+                None,
+                format!("node {id} forms a cycle"),
+            );
+            return;
+        }
+        if self.visited_nodes[index] {
+            self.violation(
+                ViolationKind::MultipleStructuralOwners,
+                Some(self.module.nodes.nodes[index].span),
+                format!("node {id} occurs in multiple structural positions"),
+            );
+            return;
+        }
         // Poison markers (error nodes and statement wrappers around them)
         // are leaves and do not contribute to the nesting chain.
         let poison = match kind {
@@ -1027,13 +1140,12 @@ impl<'a> Validator<'a> {
             _ => false,
         };
         if poison {
-            self.visited_nodes[id.index() as usize] = true;
+            self.visited_nodes[index] = true;
             if let HirKind::Stmt(StmtKind::Expr(inner)) = kind {
                 self.walk_node(*inner, Expect::Expr, parent_depth, loops);
             }
             return;
         }
-        let index = id.index() as usize;
         let my_depth = parent_depth + 1;
         if my_depth > self.limits.max_hir_depth {
             self.violation(
@@ -1044,17 +1156,6 @@ impl<'a> Validator<'a> {
                     self.limits.max_hir_depth
                 ),
             );
-            return;
-        }
-        if self.active_nodes[index] {
-            self.violation(
-                ViolationKind::CyclicReference,
-                None,
-                format!("node {id} forms a cycle"),
-            );
-            return;
-        }
-        if self.visited_nodes[index] {
             return;
         }
         self.visited_nodes[index] = true;
@@ -1079,13 +1180,16 @@ impl<'a> Validator<'a> {
             HirKind::Pat(kind) => match kind {
                 PatKind::Wildcard | PatKind::Error => {}
                 PatKind::Binding { local, candidate } => {
-                    if self.module.defs.get(*local).is_none() {
+                    if let Some(def) = self.module.def(*local)
+                        && !matches!(def.kind, DefKind::Local { .. })
+                    {
                         self.violation(
-                            ViolationKind::IndexOutOfBounds,
-                            None,
-                            format!("pattern binding references unknown definition {local}"),
+                            ViolationKind::KindMismatch,
+                            Some(def.span),
+                            format!("pattern binding references non-local definition {local}"),
                         );
                     }
+                    self.walk_def(*local, my_depth);
                     self.use_(*candidate, None);
                 }
                 PatKind::Lit(lit) => self.walk_literal(lit, None),
@@ -1240,9 +1344,10 @@ impl<'a> Validator<'a> {
             );
             return;
         }
-        if self.visited_types[index] {
+        if self.type_checked_depth[index].is_some_and(|depth| depth >= my_depth) {
             return;
         }
+        self.type_checked_depth[index] = Some(my_depth);
         self.visited_types[index] = true;
         self.active_types[index] = true;
         let kind = self.module.types.types[index].kind.clone();

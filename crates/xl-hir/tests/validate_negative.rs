@@ -561,3 +561,267 @@ fn type_reference_out_of_bounds_flow_is_rejected() {
             .any(|violation| violation.kind == ViolationKind::IndexOutOfBounds)
     );
 }
+
+// Directive 011-R3: pin V-1/V-2 independently of incidental violations.
+fn append_def(module: &mut xl_hir::HirModule, original: xl_hir::DefId) -> xl_hir::DefId {
+    let id = xl_hir::DefId::from_index(module.defs.defs.len() as u32);
+    let mut clone = module.def(original).unwrap().clone();
+    clone.id = id;
+    module.defs.defs.push(clone);
+    module
+        .origins
+        .defs
+        .push(module.origins.defs[original.index() as usize].clone());
+    id
+}
+
+fn assert_violation(module: &xl_hir::HirModule, kind: ViolationKind) {
+    let violations = validate(module);
+    assert!(
+        violations.iter().any(|violation| violation.kind == kind),
+        "expected {kind:?}: {violations:?}"
+    );
+}
+
+#[test]
+fn v1_orphaned_top_level_item_is_rejected() {
+    let mut output = sample();
+    let original = common::def_named(&output.module, "f").id;
+    append_def(&mut output.module, original);
+    assert_violation(&output.module, ViolationKind::UnreachableArenaEntry);
+}
+
+#[test]
+fn v1_orphaned_local_is_rejected() {
+    let mut output = sample();
+    let original = output
+        .module
+        .defs
+        .defs
+        .iter()
+        .find(|d| matches!(d.kind, DefKind::Local { .. }))
+        .unwrap()
+        .id;
+    append_def(&mut output.module, original);
+    assert_violation(&output.module, ViolationKind::UnreachableArenaEntry);
+}
+
+#[test]
+fn v1_orphaned_parameter_and_generic_are_rejected() {
+    let mut output = lower_ok("fn identity<T>(value: T) -> T { value }");
+    let generic = output
+        .module
+        .defs
+        .defs
+        .iter()
+        .find(|d| matches!(d.kind, DefKind::GenericParam { .. }))
+        .unwrap()
+        .id;
+    let param = output
+        .module
+        .defs
+        .defs
+        .iter()
+        .find(|d| matches!(d.kind, DefKind::Param { .. }))
+        .unwrap()
+        .id;
+    append_def(&mut output.module, generic);
+    append_def(&mut output.module, param);
+    assert_violation(&output.module, ViolationKind::UnreachableArenaEntry);
+}
+
+#[test]
+fn v1_valid_parent_without_owner_edge_is_rejected() {
+    let mut output = sample();
+    let original = common::def_named(&output.module, "x").id;
+    let orphan = append_def(&mut output.module, original);
+    assert_eq!(
+        output.module.def(orphan).unwrap().parent,
+        output.module.def(original).unwrap().parent
+    );
+    assert_violation(&output.module, ViolationKind::UnreachableArenaEntry);
+}
+
+#[test]
+fn v1_field_claiming_a_different_valid_struct_owner_is_rejected() {
+    let mut output = lower_ok("struct A { x: i32 } struct B { y: i32 }");
+    let other = common::def_named(&output.module, "B").id;
+    let field = common::def_named(&output.module, "x").id;
+    output.module.defs.defs[field.index() as usize].parent = Some(other);
+    assert_violation(&output.module, ViolationKind::ParentKindMismatch);
+}
+
+#[test]
+fn v1_orphaned_receiver_is_rejected() {
+    let mut output = lower_ok("trait T { fn f(self); }");
+    let receiver = output
+        .module
+        .defs
+        .defs
+        .iter()
+        .find(|d| matches!(d.kind, DefKind::Receiver { .. }))
+        .unwrap()
+        .id;
+    append_def(&mut output.module, receiver);
+    assert_violation(&output.module, ViolationKind::UnreachableArenaEntry);
+}
+
+#[test]
+fn v2_shared_expression_sibling_is_rejected() {
+    let mut output = lower_ok("fn f() { (1, 2) }");
+    let tuple = find_expr_node(&output.module, |kind| matches!(kind, ExprKind::Tuple(_)));
+    let HirKind::Expr(ExprKind::Tuple(ref mut elements)) =
+        output.module.nodes.nodes[tuple.index() as usize].kind
+    else {
+        panic!()
+    };
+    elements.insert(1, elements[0]);
+    assert_violation(&output.module, ViolationKind::MultipleStructuralOwners);
+}
+
+#[test]
+fn v2_shared_body_at_different_depth_is_rejected() {
+    let mut output = lower_ok("fn f() { { 1 }; 0 }");
+    let block = find_expr_node(&output.module, |kind| matches!(kind, ExprKind::Block(_)));
+    let HirKind::Expr(ExprKind::Block(body)) = output.module.node(block).unwrap().kind else {
+        panic!()
+    };
+    let original = common::def_named(&output.module, "f");
+    let DefKind::Fn {
+        body: Some(root), ..
+    } = original.kind
+    else {
+        panic!()
+    };
+    let tail = output.module.body(root).unwrap().tail.unwrap();
+    output.module.nodes.nodes[tail.index() as usize].kind = HirKind::Expr(ExprKind::Block(body));
+    assert_violation(&output.module, ViolationKind::MultipleStructuralOwners);
+}
+
+#[test]
+fn v2_shared_node_under_distinct_loops_is_rejected() {
+    let mut output = lower_ok("fn f() { while true { break; } while true { break; } }");
+    let loops: Vec<_> = output
+        .module
+        .nodes
+        .nodes
+        .iter()
+        .filter_map(|node| match node.kind {
+            HirKind::Expr(ExprKind::While(_, body)) => Some(body),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(loops.len(), 2);
+    let first = output.module.body(loops[0]).unwrap().stmts[0];
+    output.module.bodies.bodies[loops[1].index() as usize]
+        .stmts
+        .push(first);
+    assert_violation(&output.module, ViolationKind::MultipleStructuralOwners);
+}
+
+#[test]
+fn v2_shared_break_outside_its_loop_is_rejected() {
+    let mut output = lower_ok("fn f() { while true { break; } 0 }");
+    let inside = output
+        .module
+        .nodes
+        .nodes
+        .iter()
+        .find_map(|node| match node.kind {
+            HirKind::Expr(ExprKind::Break { .. }) => Some(node.id),
+            _ => None,
+        })
+        .unwrap();
+    let original = common::def_named(&output.module, "f");
+    let DefKind::Fn {
+        body: Some(root), ..
+    } = original.kind
+    else {
+        panic!()
+    };
+    // Reuse an expression as the outer tail while retaining its original loop site.
+    output.module.bodies.bodies[root.index() as usize].tail = Some(inside);
+    assert_violation(&output.module, ViolationKind::MultipleStructuralOwners);
+}
+
+#[test]
+fn v2_shared_continue_outside_its_loop_is_rejected() {
+    let mut output = lower_ok("fn f() { while true { continue; } 0 }");
+    let inside = output
+        .module
+        .nodes
+        .nodes
+        .iter()
+        .find_map(|node| match node.kind {
+            HirKind::Expr(ExprKind::Continue { .. }) => Some(node.id),
+            _ => None,
+        })
+        .unwrap();
+    let original = common::def_named(&output.module, "f");
+    let DefKind::Fn {
+        body: Some(root), ..
+    } = original.kind
+    else {
+        panic!()
+    };
+    output.module.bodies.bodies[root.index() as usize].tail = Some(inside);
+    assert_violation(&output.module, ViolationKind::MultipleStructuralOwners);
+}
+
+#[test]
+fn v2_shared_type_must_recheck_effective_depth() {
+    let mut output = lower_ok("struct S { x: f64 } fn f() -> f64 { 0.0 }");
+    let field = common::def_named(&output.module, "x");
+    let DefKind::Field { ty: field_type } = field.kind else {
+        panic!()
+    };
+    let f = common::def_named(&output.module, "f");
+    let DefKind::Fn { sig, .. } = f.kind else {
+        panic!()
+    };
+    let return_type = output.module.sig(sig).unwrap().ret.unwrap();
+    let original = output.module.type_ref(field_type).unwrap().clone();
+    let child_id = xl_hir::TypeRefId::from_index(output.module.types.types.len() as u32);
+    let mut child = original;
+    child.id = child_id;
+    output.module.types.types.push(child);
+    output
+        .module
+        .origins
+        .types
+        .push(output.module.origins.types[field_type.index() as usize].clone());
+    output.module.types.types[field_type.index() as usize].kind = TypeRefKind::Slice(child_id);
+    output.module.types.types[return_type.index() as usize].kind = TypeRefKind::Slice(field_type);
+    let limits = LowerLimits {
+        max_hir_depth: 2,
+        ..LowerLimits::RATIFIED
+    };
+    let violations = validate_with_limits(&output.module, limits);
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.kind == ViolationKind::DepthExceeded),
+        "shared nested type skipped deeper path: {violations:?}"
+    );
+}
+
+#[test]
+fn v2_signature_cannot_be_shared_by_distinct_owners() {
+    let mut output = lower_ok("fn f() {} fn g() {}");
+    let f = common::def_named(&output.module, "f").id;
+    let g = common::def_named(&output.module, "g").id;
+    let DefKind::Fn { sig: first, .. } = output.module.def(f).unwrap().kind else {
+        panic!()
+    };
+    let DefKind::Fn { ref mut sig, .. } = output.module.defs.defs[g.index() as usize].kind else {
+        panic!()
+    };
+    *sig = first;
+    assert_violation(&output.module, ViolationKind::MultipleStructuralOwners);
+}
+
+#[test]
+fn v1_v2_compiler_generated_shared_annotations_stay_valid() {
+    let output = lower_ok("fn f() { let (a, b): (i32, i32) = (1, 2); a }");
+    assert!(validate(&output.module).is_empty());
+}
